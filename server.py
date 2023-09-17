@@ -1,12 +1,13 @@
-from socket import *
+from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
-from time import sleep
+from queue import Queue
+#from time import sleep
 
 class Server:
     def __init__(self, ip, port):
         self.ip = ip
         self.port = port
-        self.socket = None
+        self.clients = {}
 
     def start(self):
         self.socket = socket(AF_INET, SOCK_DGRAM)
@@ -17,11 +18,20 @@ class Server:
     def handleSocketMessages(self):
         while True:
             encodedMessage, clientAddress = self.socket.recvfrom(2048)
-            Thread(target=self.handleClientMessage, args=(encodedMessage, clientAddress)).start()
+            try:
+                clientQueue = self.clients[clientAddress[1]]
+                clientQueue.put(encodedMessage)
+            except KeyError:
+                clientQueue = Queue()
+                self.clients[clientAddress[1]] = clientQueue
+                clientQueue.put(encodedMessage)
+                Thread(target=self.handleClientMessage, args=(encodedMessage, clientAddress, clientQueue)).start()
 
-    def handleClientMessage(self, encodedMessage, clientAddress):
-        print(f"{clientAddress[1]}: {encodedMessage.decode()}")
-        sleep(5)
+    def handleClientMessage(self, encodedMessage, clientAddress, clientQueue):
+        while True:
+            encodedMessage = clientQueue.get()
+            print(f"{clientAddress[1]}: {encodedMessage.decode()}")
+        #sleep(5)
 
 
 if __name__ == "__main__":

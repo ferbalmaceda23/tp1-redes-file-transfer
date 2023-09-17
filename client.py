@@ -1,10 +1,9 @@
-from socket import *
+from socket import socket, AF_INET, SOCK_DGRAM
 
 class Client:
     def __init__(self, ip, port):
         self.ip = ip
         self.port = port
-        self.socket = None
     
     def connect(self):
         self.socket = socket(AF_INET, SOCK_DGRAM)
