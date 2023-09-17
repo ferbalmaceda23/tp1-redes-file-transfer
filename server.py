@@ -1,7 +1,6 @@
-import sys
-import time
 from socket import *
 from threading import Thread
+from time import sleep
 
 class Server:
     def __init__(self, ip, port):
@@ -17,12 +16,13 @@ class Server:
     
     def handleSocketMessages(self):
         while True:
-            message, clientAddress = self.socket.recvfrom(2048)
-            Thread(target=self.handleClientMessage, args=(message, clientAddress)).start()
+            encodedMessage, clientAddress = self.socket.recvfrom(2048)
+            Thread(target=self.handleClientMessage, args=(encodedMessage, clientAddress)).start()
 
-    def handleClientMessage(self, message, clientAddress):
-        print(f"{clientAddress}: {message}")
-        #time.sleep(5)
+    def handleClientMessage(self, encodedMessage, clientAddress):
+        print(f"{clientAddress[1]}: {encodedMessage.decode()}")
+        sleep(5)
+
 
 if __name__ == "__main__":
     server = Server("localhost", 8080)
