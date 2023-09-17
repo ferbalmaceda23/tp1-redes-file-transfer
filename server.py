@@ -1,7 +1,11 @@
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
 from queue import Queue
-#from time import sleep
+from message import Message
+
+LOCAL_HOST = "127.0.0.1"
+LOCAL_PORT = 8080
+BUFFER_SIZE = 2048
 
 class Server:
     def __init__(self, ip, port):
@@ -12,28 +16,29 @@ class Server:
     def start(self):
         self.socket = socket(AF_INET, SOCK_DGRAM)
         self.socket.bind((self.ip, self.port))
-        print("Server is running")
-        self.handleSocketMessages()
+        print(f"Server {self.ip} is running on port {self.port}")
+        self.handle_socket_messages()
     
-    def handleSocketMessages(self):
+    def handle_socket_messages(self):
         while True:
-            encodedMessage, clientAddress = self.socket.recvfrom(2048)
+            encoded_message, client_address = self.socket.recvfrom(BUFFER_SIZE) 
             try:
-                clientQueue = self.clients[clientAddress[1]]
-                clientQueue.put(encodedMessage)
+                client_queue = self.clients[client_address[1]]
+                client_queue.put(encoded_message)
             except KeyError:
-                clientQueue = Queue()
-                self.clients[clientAddress[1]] = clientQueue
-                clientQueue.put(encodedMessage)
-                Thread(target=self.handleClientMessage, args=(encodedMessage, clientAddress, clientQueue)).start()
+                client_queue = Queue()
+                self.clients[client_address[1]] = client_queue
+                client_queue.put(encoded_message)
+                Thread(target=self.handle_client_message, args=(encoded_message, client_address, client_queue)).start()
 
-    def handleClientMessage(self, encodedMessage, clientAddress, clientQueue):
+    def handle_client_message(self, encoded_message, client_address, client_queue):
         while True:
-            encodedMessage = clientQueue.get()
-            print(f"{clientAddress[1]}: {encodedMessage.decode()}")
-        #sleep(5)
+            encoded_message = client_queue.get()
+            msg = Message.decode(encoded_message)
+            print(f"{client_address[1]}: {msg}")
+        #sleep(5)??
 
 
 if __name__ == "__main__":
-    server = Server("localhost", 8080)
+    server = Server(LOCAL_HOST, LOCAL_PORT)
     server.start()
