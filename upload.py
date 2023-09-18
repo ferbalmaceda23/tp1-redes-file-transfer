@@ -13,6 +13,7 @@ def upload(client):
             if not data:
                 client.send(Message(Command.UPLOAD, CLOSE,
                             length, args.name, data))
+                break
             client.send(Message(Command.UPLOAD, NO_FLAGS,
                         length, args.name, data))
             

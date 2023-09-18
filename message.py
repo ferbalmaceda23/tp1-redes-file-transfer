@@ -18,6 +18,12 @@ id: [int]
 data: [bytes]
 """
 
+def add_padding(data: bytes, n: int):
+    k = n - len(data)
+    if k < 0:
+        raise ValueError
+    return data + b"\0" * k
+
 class Message:
     def __init__(self, command: Command, flags: Flag, file_length: int, file_name: str, data: bytes):
         self.command = command
@@ -43,11 +49,11 @@ class Message:
 
         # Assuming 'file_name' is a UTF-8 encoded string (up to 400 bytes)
         file_name_bytes = bytes_arr[6:406]
-        file_name = file_name_bytes.decode('utf-8')
+        file_name = file_name_bytes.decode().strip("\0")
         print("File Name:", file_name)
 
         # Assuming 'data' is the remaining bytes after the previous fields
-        data = bytes_arr[406:]
+        data = bytes_arr[406: 406 + file_length]
         print("Data Length:", len(data))
 
         return {
@@ -93,14 +99,14 @@ class Message:
         bytes_arr += self.file_length.to_bytes(4, signed=False, byteorder='big')
 
         if self.file_name is not None:
-            bytes_arr += self.file_name.encode()
+            bytes_arr += add_padding(self.file_name.encode(), 400)
         
         # fill with 0 
-        relleno_len = 1024 - len(bytes_arr)
-        relleno = b'0' * relleno_len
-        bytes_arr += relleno
+        # relleno_len = 1024 - len(bytes_arr)
+        # relleno = b'0' * relleno_len
+        # bytes_arr += relleno
         # append data from positoin 1024 to 2048
-        bytes_arr  += self.data
+        bytes_arr  += add_padding(self.data, 2048 - 406)
 
         return  bytes_arr
 
