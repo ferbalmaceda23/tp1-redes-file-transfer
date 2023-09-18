@@ -87,22 +87,22 @@ class Message:
     #     return cls(command, flags, file_length, file_name, data)
     
     def encode(self):
-        bytes_arr = []
-        bytes_arr.append(self.command.get_bytes())
+        bytes_arr = b""
+        bytes_arr += self.command.get_bytes()
         bytes_arr += self.flags.get_bytes()
-        bytes_arr.append(self.file_length.to_bytes(1, signed=False, byteorder='big'))
+        bytes_arr += self.file_length.to_bytes(4, signed=False, byteorder='big')
 
         if self.file_name is not None:
-            bytes_arr.append(self.file_name.encode())
+            bytes_arr += self.file_name.encode()
         
         # fill with 0 
         relleno_len = 1024 - len(bytes_arr)
-        relleno = [b'0']*relleno_len
+        relleno = b'0' * relleno_len
         bytes_arr += relleno
         # append data from positoin 1024 to 2048
         bytes_arr  += self.data
 
-        return  b''.join(bytes_arr)
+        return  bytes_arr
 
 
     # def encode(self):
