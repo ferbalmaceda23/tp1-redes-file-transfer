@@ -1,12 +1,6 @@
-from enum import Enum
 from flags import Flag
-
-class Command(Enum):
-    DOWNLOAD = 1
-    UPLOAD = 2
-
-    def get_bytes(self):
-        return self.value.to_bytes(1, byteorder='big', signed=False)
+from lib.commands import Command
+from lib.log import LOG
 
 """
 command: [DOWNLOAD, UPLOAD]
@@ -35,34 +29,26 @@ class Message:
     @classmethod
     def decode(cls, bytes_arr: bytes):
         # Assuming 'command' is a single byte
-        command = bytes_arr[0]
-        print("Command:", command)
+        try: 
+           command =  Command.from_values(bytes_arr[0])
+        except ValueError:
+            LOG.error("Invalid command")
+            raise ValueError("Invalid command")
 
         # Assuming 'flags' is 1 byte
         flags = bytes_arr[1]
 
-        print("Flags:", flags)
-
         # Assuming 'file_length' is a 32-bit integer (4 bytes)
         file_length = int.from_bytes(bytes_arr[2:6], byteorder="big")
-        print("File Length:", file_length)
 
         # Assuming 'file_name' is a UTF-8 encoded string (up to 400 bytes)
         file_name_bytes = bytes_arr[6:406]
         file_name = file_name_bytes.decode().strip("\0")
-        print("File Name:", file_name)
 
         # Assuming 'data' is the remaining bytes after the previous fields
         data = bytes_arr[406: 406 + file_length]
-        print("Data Length:", len(data))
-
-        return {
-            "command": command,
-            "flags": flags,
-            "file_length": file_length,
-            "file_name": file_name,
-            "data": data
-        }
+        
+        return Message(command, flags, file_length, file_name, data)
 
     # @classmethod
     # def decode(cls, encoded_message: bytes):

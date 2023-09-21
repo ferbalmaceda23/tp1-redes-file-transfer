@@ -1,6 +1,5 @@
 from argparse import ArgumentParser
 
-
 def parse_args_upload():
     parser = ArgumentParser(
         prog="upload",

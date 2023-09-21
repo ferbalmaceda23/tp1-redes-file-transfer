@@ -1,3 +1,5 @@
+# Flags used in the protocol
+# [HI, CLOSE, ACK, CORRUPTED_PACKAGE]
 class Flag:
     def __init__(self, name, id):
         self.name = name

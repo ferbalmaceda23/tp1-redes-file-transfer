@@ -2,6 +2,8 @@ import logging
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
 from queue import Queue
+from flags import ACK, HI
+from lib.commands import Command
 from lib.log import LOG
 from message import Message
 
@@ -34,11 +36,24 @@ class Server:
                 Thread(target=self.handle_client_message, args=(encoded_message, client_address, client_queue)).start()
 
     def handle_client_message(self, encoded_message, client_address, client_queue):
-        while True:
-            encoded_message = client_queue.get()
-            msg = Message.decode(encoded_message)
-            print(f"{client_address[1]}: {msg}")
+        encoded_message = client_queue.get()
+        msg = Message.decode(encoded_message)
+        LOG.info(f"Cliente {client_address[1]}: {msg.command} + {msg.flags}")
+        if msg.flags == HI.encoded:
+            LOG.info("Client is online")
+            self.socket.sendto(Message(msg.command, ACK, 0, None, b"").encode(), client_address)
+        else:
+            if msg.command == Command.DOWNLOAD:
+                self.handle_download(msg, client_address)
+            elif msg.command == Command.UPLOAD:
+                self.handle_upload(msg, client_address)
         #sleep(5)??
+
+    def handle_download(self, msg, client_address):
+        LOG.info("Manejo descarga de ", msg.file_name)
+
+    def handle_upload(self, msg, client_address):
+        LOG.info("Manejo subida de ", msg.file_name)
 
 
 if __name__ == "__main__":

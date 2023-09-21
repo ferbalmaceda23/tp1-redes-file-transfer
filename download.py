@@ -1,6 +1,6 @@
 from click import Command
 from client import Client
-from utils import parse_args_download
+from lib.utils import parse_args_download
 
 def download(client):
     print(args.src)
