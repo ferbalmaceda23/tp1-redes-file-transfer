@@ -10,6 +10,8 @@ file_path: [str]
 file_name: [str]
 id: [int]
 data: [bytes]
+ack_number: [int]
+seq_number: [int]
 """
 
 def add_padding(data: bytes, n: int):
@@ -19,12 +21,15 @@ def add_padding(data: bytes, n: int):
     return data + b"\0" * k
 
 class Message:
-    def __init__(self, command: Command, flags: Flag, file_length: int, file_name: str, data: bytes):
+    def __init__(self, command: Command, flags: Flag, file_length: int, file_name: str, data: bytes, seq_number= 0, ack_number = 0):        
         self.command = command
         self.flags = flags
         self.file_length = file_length
         self.file_name = file_name
+        self.seq_number = seq_number
+        self.ack_number = ack_number
         self.data = data
+        
     
     @classmethod
     def decode(cls, bytes_arr: bytes):
@@ -43,58 +48,42 @@ class Message:
 
         # Assuming 'file_name' is a UTF-8 encoded string (up to 400 bytes)
         file_name_bytes = bytes_arr[6:406]
-        file_name = file_name_bytes.decode().strip("\0")
+        file_name = file_name_bytes.decode()
+    
+        # Assuming 'seq_number' is a 32-bit integer (4 bytes)
+        seq_number = int.from_bytes(bytes_arr[405:409], byteorder="big")
+
+        # Assuming 'ack_number' is a 32-bit integer (4 bytes)
+        ack_number = int.from_bytes(bytes_arr[409:413], byteorder="big")
 
         # Assuming 'data' is the remaining bytes after the previous fields
-        data = bytes_arr[406: 406 + file_length]
-        
-        return Message(command, flags, file_length, file_name, data)
+        data = bytes_arr[416: 416 + file_length]
 
-    # @classmethod
-    # def decode(cls, encoded_message: bytes):
-    #     # Decode command from the first byte
-    #     command = "DOWNLOAD" if encoded_message[0] == 0 else "UPLOAD"
+        return Message(command, flags, file_length, file_name, data, seq_number, ack_number)
 
-    #     # Decode flags from the second byte
-    #     flags_byte = encoded_message[1]
-    #     flags = []
-    #     if flags_byte & (1 << 0):
-    #         flags.append("HI")
-    #     if flags_byte & (1 << 1):
-    #         flags.append("CLOSE")
-    #     if flags_byte & (1 << 2):
-    #         flags.append("ACK")
-    #     if flags_byte & (1 << 3):
-    #         flags.append("CORRUPTED_PACKAGE")
-
-    #     # Decode file_length as a 32-bit integer from bytes 2 to 5
-    #     file_length = int.from_bytes(encoded_message[2:6], byteorder='big')
-
-    #     # Decode file_name as UTF-8 string from bytes 6 to 405 (assuming max length)
-    #     file_name = encoded_message[6:406].decode('utf-8').rstrip('\x00')
-
-    #     # Remaining bytes are the data
-    #     data = encoded_message[406:]
-
-    #     return cls(command, flags, file_length, file_name, data)
     
     def encode(self):
         bytes_arr = b""
         bytes_arr += self.command.get_bytes()
         bytes_arr += self.flags.get_bytes()
         bytes_arr += self.file_length.to_bytes(4, signed=False, byteorder='big')
-
+        
         if self.file_name is not None:
             bytes_arr += add_padding(self.file_name.encode(), 400)
+
+
+        bytes_arr += self.seq_number.to_bytes(4, signed=False, byteorder='big')
+        bytes_arr += self.ack_number.to_bytes(4, signed=False, byteorder='big')
+    
         
         # fill with 0 
         # relleno_len = 1024 - len(bytes_arr)
         # relleno = b'0' * relleno_len
         # bytes_arr += relleno
         # append data from positoin 1024 to 2048
-        bytes_arr  += add_padding(self.data, 2048 - 406)
-
-        return  bytes_arr
+        bytes_arr  += add_padding(self.data, 2048 - len(bytes_arr))
+        
+        return bytes_arr
 
 
     # def encode(self):

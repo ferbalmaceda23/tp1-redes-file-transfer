@@ -1,6 +1,6 @@
 from socket import socket, AF_INET, SOCK_DGRAM
 from exceptions import ServerConnectionError
-from flags import Flag, HI, CLOSE, ACK, CORRUPTED_PACKAGE, NO_FLAGS
+from flags import Flag, HI, HI_ACK, CLOSE, ACK, CORRUPTED_PACKAGE, NO_FLAGS
 from lib.log import LOG
 from message import Message
 
@@ -11,22 +11,22 @@ class Client:
         self.port = port
     
     # handshake start
-    def connect(self, command):
+    def start(self, command, action):
         self.socket = socket(AF_INET, SOCK_DGRAM)
         #self.socket.settimeout(3)
-        self.send(Message(command, HI, 0, "", b""))
+        msg = Message(command, HI, 0, "", b"")
+        self.send(msg)
+        print(msg)
         LOG.info("Le mando al server")
-        encoded_message, _ = self.socket.recvfrom(2048)
-        msg = Message.decode(encoded_message)
+        enconded_message, _ = self.socket.recvfrom(2048)
+        msg = Message.decode(enconded_message)
         if self.socket.timeout:
             LOG.error("Server is offline")
             raise ServerConnectionError
-        if msg.flags == ACK.encoded:
+        if msg.flags == HI_ACK.encoded:
             LOG.info("Server is online")
-            self.send(Message(command, ACK, 0, None, b""))
-        # handshake end 
-    
-    def start(self, action):
+            self.send(Message(command, HI_ACK, 0, None, b""))
+        # handshake 
         action()
 
     def send(self, message):

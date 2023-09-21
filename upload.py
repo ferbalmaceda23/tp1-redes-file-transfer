@@ -13,14 +13,15 @@ def upload(client):
             length = len(data)
             if not data:
                 client.send(Message(Command.UPLOAD, CLOSE,
-                            length, args.name, data))
-                break
+                            length,  args.name if args.name else args.src, data))
             client.send(Message(Command.UPLOAD, NO_FLAGS,
-                        length, args.name, data))
-            
+                        length, args.name if args.name else args.src, data))
+            file_size -= length
+    
+    client.send(Message(Command.UPLOAD, CLOSE, 0, "", b"", 0, 0))
+
 
 if __name__ == "__main__":
     args = parse_args_upload()
     client = Client(args.host, args.port)
-    client.connect(Command.UPLOAD)
-    client.start(lambda: upload(client))
+    client.start(Command.UPLOAD, lambda: upload(client))
