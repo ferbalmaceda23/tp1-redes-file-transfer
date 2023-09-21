@@ -16,15 +16,15 @@ class Client:
         #self.socket.settimeout(3)
         self.send(Message(command, HI, 0, "", b""))
         LOG.info("Le mando al server")
-        enconded_message, _ = self.socket.recvfrom(2048)
+        encoded_message, _ = self.socket.recvfrom(2048)
+        msg = Message.decode(encoded_message)
         if self.socket.timeout:
             LOG.error("Server is offline")
             raise ServerConnectionError
-        if enconded_message.decode().flags == ACK.encoded:
+        if msg.flags == ACK.encoded:
             LOG.info("Server is online")
-            self.socket.send(Message(command, ACK, 0, None, b"").encode(), (self.ip, self.port))
+            self.send(Message(command, ACK, 0, None, b""))
         # handshake end 
-        self.start()
     
     def start(self, action):
         action()
