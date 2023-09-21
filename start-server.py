@@ -1,6 +1,8 @@
+import logging
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
 from queue import Queue
+from lib.log import LOG
 from message import Message
 
 LOCAL_HOST = "127.0.0.1"
@@ -16,7 +18,7 @@ class Server:
     def start(self):
         self.socket = socket(AF_INET, SOCK_DGRAM)
         self.socket.bind((self.ip, self.port))
-        print(f"Server {self.ip} is running on port {self.port}")
+        LOG.info(f"Server {self.ip} is running on port {self.port}")
         self.handle_socket_messages()
     
     def handle_socket_messages(self):
@@ -41,4 +43,5 @@ class Server:
 
 if __name__ == "__main__":
     server = Server(LOCAL_HOST, LOCAL_PORT)
+
     server.start()
