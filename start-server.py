@@ -50,24 +50,28 @@ class Server:
             decoded_msg = Message.decode(encoded_message)
 
             if decoded_msg.flags == HI_ACK.encoded:
-                self.init_file_transfer_operation(client_address, client_queue, decoded_msg, client_port)
+                self.init_file_transfer_operation(client_queue, decoded_msg, client_port)
             else:
-                self.close_client_connection(client_address, client_port)
+                self.close_client_connection(decoded_msg.command, client_address)
         except:
             del self.clients[client_port]
 
-    def close_client_connection(self, client_address, client_port):
+    def close_client_connection(self, command, client_address):
+        client_port = client_address[1]
         del self.clients[client_port]
-        self.socket.sendto(Message(Command.UPLOAD, CLOSE, 0, "", b"", 0, 0).encode(), client_address)
+        self.send_CLOSE(command, client_address)
         LOG.info(f"Client {client_port}: Timeout or unknown message")
 
-    def init_file_transfer_operation(self, client_address, client_queue, decoded_msg, client_port):
+    def send_CLOSE(self, command, client_address):
+        self.socket.sendto(Message(command, CLOSE, 0, "", b"", 0, 0).encode(), client_address)
+
+    def init_file_transfer_operation(self, client_queue, decoded_msg, client_port):
         LOG.info(f"Client {client_port}: is online, message type: {decoded_msg.command}")
         self.clients[client_port] = client_queue
         if decoded_msg.command == Command.DOWNLOAD:
-            self.handle_download(decoded_msg, client_address, client_queue)
+            self.handle_download(decoded_msg, client_port, client_queue)
         elif decoded_msg.command == Command.UPLOAD:
-            self.handle_upload(decoded_msg, client_address, client_queue)
+            self.handle_upload(decoded_msg, client_port, client_queue)
 
     def send_HI_ACK(self, client_address, decoded_msg):
         self.socket.sendto(Message(decoded_msg.command, HI_ACK, 0, None, b"").encode(), client_address)
@@ -75,13 +79,12 @@ class Server:
     def handle_download(self, msg, client_address, client_queue):
         LOG.info(f"Manejo descarga de {msg.file_name}")
 
-    def handle_upload(self, msg, client_address, client_queue):
+    def handle_upload(self, msg, client_port, client_queue):
         LOG.info(f"Started receiving file: {msg.file_name}")
 
         first_upload_msg = client_queue.get(block=True, timeout=TIMEOUT)
         msg = Message.decode(first_upload_msg)
     
-        client_port = client_address[1]
         LOG.info(f"Client file name: {msg.file_name }")
         with open(msg.file_name, "wb") as file:
             while msg.flags != CLOSE.encoded:
@@ -90,7 +93,7 @@ class Server:
                 file.write(msg.data)
                 encoded_message = client_queue.get(block=True, timeout=TIMEOUT)
                 msg = Message.decode(encoded_message)
-            LOG.info(f"Client {client_port}: received close file {msg.file_name}")
+                LOG.info(f"Client {client_port}: received close file {msg.file_name}")
                     
 
 

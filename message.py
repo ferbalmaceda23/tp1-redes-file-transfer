@@ -30,6 +30,17 @@ class Message:
         self.ack_number = ack_number
         self.data = data
         
+    def __str__(self):
+        return (
+            f"Message: "
+            f"command={self.command}, "
+            f"flags={self.flags}, "
+            f"file_length={self.file_length}, "
+            f"file_name={self.file_name}, "
+            f"seq_number={self.seq_number}, "
+            f"ack_number={self.ack_number}, "
+            f"data_length={len(self.data)} bytes"
+        )
     
     @classmethod
     def decode(cls, bytes_arr: bytes):
