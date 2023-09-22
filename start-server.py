@@ -1,7 +1,7 @@
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
 from queue import Queue
-from lib.constants import TIMEOUT
+from lib.constants import TIMEOUT, BUFFER_SIZE
 from flags import ACK, HI, HI_ACK, CLOSE
 from lib.commands import Command
 from lib.log import LOG
@@ -9,7 +9,6 @@ from message import Message
 
 LOCAL_HOST = "127.0.0.1"
 LOCAL_PORT = 8080
-BUFFER_SIZE = 2048
 
 class Server:
     def __init__(self, ip, port):
@@ -88,6 +87,7 @@ class Server:
                 LOG.info(f"Cliente le llego el mensaje {msg}")
                 encoded_message = client_queue.get(block=True, timeout=TIMEOUT)
                 msg = Message.decode(encoded_message)
+                client_port = client_address[1]
                 if msg.flags == CLOSE.encoded:
                     # simulo que le mando close
                     LOG.info(f"Cliente {client_port}: received close file {msg.file_name}")
