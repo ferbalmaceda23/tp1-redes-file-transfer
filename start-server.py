@@ -26,41 +26,52 @@ class Server:
     def handle_socket_messages(self):
         while True:
             encoded_message, client_address = self.socket.recvfrom(BUFFER_SIZE) 
+            client_port = client_address[1]
             try:
-                client_queue = self.clients[client_address[1]]
+                client_queue = self.clients[client_port]
                 client_queue.put(encoded_message)
             except KeyError:
                 client_queue = Queue()
                 client_queue.put(encoded_message)
-                self.clients[client_address[1]] = client_queue
+                self.clients[client_port] = client_queue
                 Thread(target=self.handle_client_message, args=(encoded_message, client_address, client_queue)).start()
 
     def handle_client_message(self, encoded_message, client_address, client_queue):
         encoded_message = client_queue.get()
-        msg = Message.decode(encoded_message)
-        if msg.flags == HI.encoded:
-            LOG.info(f"Cliente {client_address[1]}: wants to connect, sending confirmation, message type: {msg.command}")
-            self.socket.sendto(Message(msg.command, HI_ACK, 0, None, b"").encode(), client_address)
-            try:
-                encoded_message = client_queue.get(block=True, timeout=300)
-                msg = Message.decode(encoded_message)
+        decoded_msg = Message.decode(encoded_message)
+        if decoded_msg.flags == HI.encoded:
+            self.three_way_handshake(client_address, client_queue, decoded_msg)
 
-                if msg.flags == HI_ACK.encoded:
-                    LOG.info(f"Cliente {client_address[1]}: is online, message type: {msg.command}")
-                    self.clients[client_address[1]] = client_queue
-                    if msg.command == Command.DOWNLOAD:
-                        self.handle_download(msg, client_address, client_queue)
-                    elif msg.command == Command.UPLOAD:
-                        self.handle_upload(msg, client_address, client_queue)
-                else:
-                    del self.clients[client_address[1]]
-                    self.socket.sendto(Message(Command.UPLOAD, CLOSE, 0, "", b"", 0, 0).encode(), client_address)
-                    LOG.info(f"Cliente {client_address[1]}: Timeout or unknown message")
-            except:
-                del self.clients[client_address[1]]
+    def three_way_handshake(self, client_address, client_queue, decoded_msg):
+        client_port = client_address[1]
+        LOG.info(f"Client {client_port}: wants to connect, sending confirmation, message type: {decoded_msg.command}")
+        self.send_HI_ACK(client_address, decoded_msg)
+        try:
+            encoded_message = client_queue.get(block=True, timeout=300)
+            decoded_msg = Message.decode(encoded_message)
 
-            
-        #sleep(5)?? zzz
+            if decoded_msg.flags == HI_ACK.encoded:
+                self.init_file_transfer_operation(client_address, client_queue, decoded_msg, client_port)
+            else:
+                self.close_client_connection(client_address, client_port)
+        except:
+            del self.clients[client_port]
+
+    def close_client_connection(self, client_address, client_port):
+        del self.clients[client_port]
+        self.socket.sendto(Message(Command.UPLOAD, CLOSE, 0, "", b"", 0, 0).encode(), client_address)
+        LOG.info(f"Cliente {client_port}: Timeout or unknown message")
+
+    def init_file_transfer_operation(self, client_address, client_queue, decoded_msg, client_port):
+        LOG.info(f"Client {client_port}: is online, message type: {decoded_msg.command}")
+        self.clients[client_port] = client_queue
+        if decoded_msg.command == Command.DOWNLOAD:
+            self.handle_download(decoded_msg, client_address, client_queue)
+        elif decoded_msg.command == Command.UPLOAD:
+            self.handle_upload(decoded_msg, client_address, client_queue)
+
+    def send_HI_ACK(self, client_address, decoded_msg):
+        self.socket.sendto(Message(decoded_msg.command, HI_ACK, 0, None, b"").encode(), client_address)
 
     def handle_download(self, msg, client_address, client_queue):
         LOG.info(f"Manejo descarga de {msg.file_name}")
@@ -79,9 +90,9 @@ class Server:
                 msg = Message.decode(encoded_message)
                 if msg.flags == CLOSE.encoded:
                     # simulo que le mando close
-                    LOG.info(f"Cliente {client_address[1]}: received close file {msg.file_name}")
+                    LOG.info(f"Cliente {client_port}: received close file {msg.file_name}")
                 else:
-                    LOG.info(f"Cliente {client_address[1]}: received {len(msg.data)} ")
+                    LOG.info(f"Cliente {client_port}: received {len(msg.data)} ")
                     file.write(msg.data)
                     
 
