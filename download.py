@@ -9,5 +9,4 @@ def download(client):
 if __name__ == "__main__":
     args = parse_args_download()
     client = Client(args.host, args.port)
-    client.connect(Command.DOWNLOAD)
-    client.start(lambda: download(client))
+    client.start(Command.DOWNLOAD, lambda: download(client))

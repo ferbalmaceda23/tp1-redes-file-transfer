@@ -48,16 +48,16 @@ class Message:
 
         # Assuming 'file_name' is a UTF-8 encoded string (up to 400 bytes)
         file_name_bytes = bytes_arr[6:406]
-        file_name = file_name_bytes.decode()
+        file_name = file_name_bytes.decode().strip('\0')
     
         # Assuming 'seq_number' is a 32-bit integer (4 bytes)
-        seq_number = int.from_bytes(bytes_arr[405:409], byteorder="big")
+        seq_number = int.from_bytes(bytes_arr[406:410], byteorder="big")
 
         # Assuming 'ack_number' is a 32-bit integer (4 bytes)
-        ack_number = int.from_bytes(bytes_arr[409:413], byteorder="big")
+        ack_number = int.from_bytes(bytes_arr[410:414], byteorder="big")
 
         # Assuming 'data' is the remaining bytes after the previous fields
-        data = bytes_arr[416: 416 + file_length]
+        data = bytes_arr[414: 414 + file_length]
 
         return Message(command, flags, file_length, file_name, data, seq_number, ack_number)
 

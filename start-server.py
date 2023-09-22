@@ -1,8 +1,8 @@
-import logging
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
 from queue import Queue
-from flags import ACK, HI, HI_ACK, NO_FLAGS, CLOSE
+from lib.constants import TIMEOUT
+from flags import ACK, HI, HI_ACK, CLOSE
 from lib.commands import Command
 from lib.log import LOG
 from message import Message
@@ -32,38 +32,60 @@ class Server:
             except KeyError:
                 client_queue = Queue()
                 client_queue.put(encoded_message)
+                self.clients[client_address[1]] = client_queue
                 Thread(target=self.handle_client_message, args=(encoded_message, client_address, client_queue)).start()
 
     def handle_client_message(self, encoded_message, client_address, client_queue):
-        while True:
-            encoded_message = client_queue.get()
-            msg = Message.decode(encoded_message)
-            if msg.flags == HI.encoded:
-                LOG.info(f"Cliente {client_address[1]}: wants to connect, sending confirmation, message type: {msg.command}")
-                self.socket.sendto(Message(msg.command, HI_ACK, 0, None, b"").encode(), client_address)
-            elif msg.flags == HI_ACK.encoded:
-                LOG.info(f"Cliente {client_address[1]}: is online, message type: {msg.command}")
-                self.clients[client_address[1]] = client_queue
-            else:
-                if msg.command == Command.DOWNLOAD:
-                    self.handle_download(msg, client_address, client_queue)
-                elif msg.command == Command.UPLOAD:
-                    self.handle_upload(msg, client_address, client_queue)
-            #sleep(5)??
+        encoded_message = client_queue.get()
+        msg = Message.decode(encoded_message)
+        if msg.flags == HI.encoded:
+            LOG.info(f"Cliente {client_address[1]}: wants to connect, sending confirmation, message type: {msg.command}")
+            self.socket.sendto(Message(msg.command, HI_ACK, 0, None, b"").encode(), client_address)
+            try:
+                encoded_message = client_queue.get(block=True, timeout=300)
+                msg = Message.decode(encoded_message)
+
+                if msg.flags == HI_ACK.encoded:
+                    LOG.info(f"Cliente {client_address[1]}: is online, message type: {msg.command}")
+                    self.clients[client_address[1]] = client_queue
+                    if msg.command == Command.DOWNLOAD:
+                        self.handle_download(msg, client_address, client_queue)
+                    elif msg.command == Command.UPLOAD:
+                        self.handle_upload(msg, client_address, client_queue)
+                else:
+                    del self.clients[client_address[1]]
+                    self.socket.sendto(Message(Command.UPLOAD, CLOSE, 0, "", b"", 0, 0).encode(), client_address)
+                    LOG.info(f"Cliente {client_address[1]}: Timeout or unknown message")
+            except:
+                del self.clients[client_address[1]]
+
+            
+        #sleep(5)?? zzz
 
     def handle_download(self, msg, client_address, client_queue):
         LOG.info(f"Manejo descarga de {msg.file_name}")
 
     def handle_upload(self, msg, client_address, client_queue):
-        LOG.info(f"Start receiving file: {msg.file_name}")
-        encoded_message = client_queue.get()
-        msg = Message.decode(encoded_message)
-        if msg.flags == CLOSE.encoded:
-            # simulo que le mando close
-            LOG.info(f"Cliente {client_address[1]}: received close file {msg.file_name}")
-        else:
-            LOG.info(f"Cliente {client_address[1]}: received {msg} ")
-            
+        LOG.info(f"Started receiving file: {msg.file_name}")
+
+        #encoded_message = client_queue.get(block=True, timeout=TIMEOUT)
+        #msg = Message.decode(encoded_message)
+    
+        LOG.info(f"Cliente file name es {msg.file_name }")
+        with open("image_test.jpg", "wb") as file:
+            while True:
+                LOG.info(f"Cliente le llego el mensaje {msg}")
+                encoded_message = client_queue.get(block=True, timeout=TIMEOUT)
+                msg = Message.decode(encoded_message)
+                if msg.flags == CLOSE.encoded:
+                    # simulo que le mando close
+                    LOG.info(f"Cliente {client_address[1]}: received close file {msg.file_name}")
+                else:
+                    LOG.info(f"Cliente {client_address[1]}: received {len(msg.data)} ")
+                    file.write(msg.data)
+                    
+
+
 
 
 if __name__ == "__main__":
