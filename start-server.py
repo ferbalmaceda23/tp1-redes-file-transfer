@@ -59,7 +59,7 @@ class Server:
     def close_client_connection(self, client_address, client_port):
         del self.clients[client_port]
         self.socket.sendto(Message(Command.UPLOAD, CLOSE, 0, "", b"", 0, 0).encode(), client_address)
-        LOG.info(f"Cliente {client_port}: Timeout or unknown message")
+        LOG.info(f"Client {client_port}: Timeout or unknown message")
 
     def init_file_transfer_operation(self, client_address, client_queue, decoded_msg, client_port):
         LOG.info(f"Client {client_port}: is online, message type: {decoded_msg.command}")
@@ -78,22 +78,19 @@ class Server:
     def handle_upload(self, msg, client_address, client_queue):
         LOG.info(f"Started receiving file: {msg.file_name}")
 
-        #encoded_message = client_queue.get(block=True, timeout=TIMEOUT)
-        #msg = Message.decode(encoded_message)
+        first_upload_msg = client_queue.get(block=True, timeout=TIMEOUT)
+        msg = Message.decode(first_upload_msg)
     
-        LOG.info(f"Cliente file name es {msg.file_name }")
-        with open("image_test.jpg", "wb") as file:
-            while True:
-                LOG.info(f"Cliente le llego el mensaje {msg}")
+        client_port = client_address[1]
+        LOG.info(f"Client file name: {msg.file_name }")
+        with open(msg.file_name, "wb") as file:
+            while msg.flags != CLOSE.encoded:
+                LOG.info(f"Client {client_port} received message: {msg}")
+                LOG.info(f"Client {client_port}: received {len(msg.data)} ")
+                file.write(msg.data)
                 encoded_message = client_queue.get(block=True, timeout=TIMEOUT)
                 msg = Message.decode(encoded_message)
-                client_port = client_address[1]
-                if msg.flags == CLOSE.encoded:
-                    # simulo que le mando close
-                    LOG.info(f"Cliente {client_port}: received close file {msg.file_name}")
-                else:
-                    LOG.info(f"Cliente {client_port}: received {len(msg.data)} ")
-                    file.write(msg.data)
+            LOG.info(f"Client {client_port}: received close file {msg.file_name}")
                     
 
 
