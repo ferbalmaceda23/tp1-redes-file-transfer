@@ -1,6 +1,7 @@
 from flags import Flag
 from lib.commands import Command
 from lib.log import LOG
+from lib.constants import BUFFER_LEN
 
 """
 command: [DOWNLOAD, UPLOAD]
@@ -29,7 +30,7 @@ class Message:
         self.seq_number = seq_number
         self.ack_number = ack_number
         self.data = data
-        
+
     def __str__(self):
         return (
             f"Message: "
@@ -92,7 +93,7 @@ class Message:
         # relleno = b'0' * relleno_len
         # bytes_arr += relleno
         # append data from positoin 1024 to 2048
-        bytes_arr  += add_padding(self.data, 2048 - len(bytes_arr))
+        bytes_arr  += add_padding(self.data, BUFFER_LEN - len(bytes_arr))
         
         return bytes_arr
 
