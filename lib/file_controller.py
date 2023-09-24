@@ -1,19 +1,34 @@
 import logging
+import os
 from lib.constants import DATA_SIZE
+from lib.exceptions import FileReadingError
 
 class FileController():
-    def __init__(self, file_name):
-        self.file_name = file_name
+    @classmethod
+    def from_file_name(self, file_name):
+        file_controller = FileController()
+        file_controller.file_name  = file_name
+        file_controller.file = open(file_name, 'wb')
+        return file_controller
+    
+    @classmethod
+    def from_args(self, args):
+        file_controller = FileController()
+        file_controller.src = args.src
+        file_controller.file_name = args.name
+        file_controller.file = open(file_controller.src, 'rb')
+        return file_controller
 
     def read(self):
-        try: 
-            file = open(self.file_name, 'rb')
-            data = file.read(DATA_SIZE)
+        try:
+            data = self.file.read(DATA_SIZE)
             return data
-        except:
-            logging.error('Error reading file')
-            raise Exception('Error reading file')
+        except Exception as e:
+            logging.error(f'Error reading file: {e}')
+            raise FileReadingError
 
     def write_file(self, text):
-        with open(self.file_name, 'w') as file:
-            file.write(text)
+        self.file.write(text)
+    
+    def get_file_size(self):
+        return os.path.getsize(self.src)

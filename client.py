@@ -3,17 +3,19 @@ from socket import socket, AF_INET, SOCK_DGRAM
 from lib.exceptions import ServerConnectionError
 from flags import Flag, HI, HI_ACK, CLOSE, ACK, CORRUPTED_PACKAGE, NO_FLAGS
 from lib.constants import BUFFER_SIZE
+from lib.utils import select_protocol
 from message import Message
-import time
 
 class Client:
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, protocol):
         self.ip = ip
         self.port = port
-    
+        self.protocol = select_protocol(protocol)
+
     # handshake start
     def start(self, command, action):
         self.socket = socket(AF_INET, SOCK_DGRAM)
+        self.protocol = self.protocol(self.socket)
         #self.socket.settimeout(3) #ajustar timeout
         hi_msg = Message(command, HI, 0, "", b"")
         self.send(hi_msg)
