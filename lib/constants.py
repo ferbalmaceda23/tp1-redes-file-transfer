@@ -7,3 +7,5 @@ LOCAL_PORT = 8080
 STOP_AND_WAIT = "stop_and_wait"
 SELECTIVE_REPEAT = "selective_repeat"
 FIRST_SQN = 0
+WRITE_MODE = "wb"
+READ_MODE = "rb"

@@ -3,14 +3,14 @@ from lib.log import prepare_logging
 from message import Command, Message
 from client import Client
 from lib.utils import parse_args_upload
-from lib.constants import DATA_SIZE, LOCAL_PORT
+from lib.constants import DATA_SIZE, LOCAL_PORT, READ_MODE
 from lib.file_controller import FileController
 from lib.commands import Command
 from lib.exceptions import DuplicatedACKError
 
 
 def upload(client):
-    file_controller = FileController.from_args(args)
+    file_controller = FileController.from_args(args, READ_MODE)
     data = file_controller.read()
     file_size = file_controller.get_file_size()
     while file_size > 0:

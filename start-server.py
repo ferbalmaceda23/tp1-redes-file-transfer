@@ -4,7 +4,7 @@ from lib.log import prepare_logging
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
 from queue import Queue
-from lib.constants import FIRST_SQN, TIMEOUT, BUFFER_SIZE, LOCAL_HOST, LOCAL_PORT
+from lib.constants import FIRST_SQN, READ_MODE, TIMEOUT, BUFFER_SIZE, LOCAL_HOST, LOCAL_PORT, WRITE_MODE
 from flags import ACK, HI, HI_ACK, CLOSE
 from lib.commands import Command
 from message import Message
@@ -70,7 +70,7 @@ class Server:
         logging.info(f"Client {client_port}: is online, message type: {decoded_msg.command}")
         self.clients[client_port] = client_msg_queue
         if decoded_msg.command == Command.DOWNLOAD:
-            self.handle_download(decoded_msg, client_port, client_msg_queue)
+            self.handle_download(client_port, client_msg_queue)
         elif decoded_msg.command == Command.UPLOAD:
             self.handle_upload(client_port, client_msg_queue)
         else:
@@ -83,9 +83,9 @@ class Server:
     def send_CLOSE(self, command, client_address):
         self.socket.sendto(Message(command, CLOSE, 0, "", b"", 0, 0).encode(), client_address)
 
-    def handle_download(self, msg, client_port, client_msg_queue):
+    def handle_download(self, client_port, client_msg_queue):
         file_name = msg.file_name
-        file_controller = FileController.from_file_name(file_name)
+        file_controller = FileController.from_file_name(file_name, READ_MODE)
         file_size = file_controller.get_file_size()
     #TODO adaptar al send del protocolo
         while file_size > 0:
@@ -106,7 +106,7 @@ class Server:
             msg = self.dequeue_encoded_msg(client_msg_queue)
 
         logging.info(f"Uploading file to: {msg.file_name }")
-        file_controller = FileController.from_file_name(msg.file_name)
+        file_controller = FileController.from_file_name(msg.file_name, WRITE_MODE)
         while msg.flags != CLOSE.encoded:
             self.protocol.receive(msg, client_port, file_controller)
             msg = self.dequeue_encoded_msg(client_msg_queue)

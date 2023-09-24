@@ -5,18 +5,18 @@ from lib.exceptions import FileReadingError
 
 class FileController():
     @classmethod
-    def from_file_name(self, file_name):
+    def from_file_name(self, file_name, mode):
         file_controller = FileController()
         file_controller.file_name  = file_name
-        file_controller.file = open(file_name, 'wb')
+        file_controller.file = open(file_name, mode)
         return file_controller
     
     @classmethod
-    def from_args(self, args):
+    def from_args(self, args, mode):
         file_controller = FileController()
         file_controller.src = args.src
         file_controller.file_name = args.name
-        file_controller.file = open(file_controller.src, 'rb')
+        file_controller.file = open(file_controller.src, mode)
         return file_controller
 
     def read(self):
