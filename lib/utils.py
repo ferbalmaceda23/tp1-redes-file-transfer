@@ -55,6 +55,7 @@ def add_args(parser):
         "--src",
         help="source file path",
         action="store",
+        required=True,
         type=str
     )
 
@@ -78,7 +79,7 @@ def validate_args(parser):
         args.host = "localhost"
     if args.port is None:
         args.port = 8080
-    if args.src is None:
-        print("src is required")
-        exit()
+    if args.name is None:
+        args.name = args.src.split("/")[-1]
+    
     return args

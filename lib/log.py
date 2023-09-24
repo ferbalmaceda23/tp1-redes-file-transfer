@@ -5,10 +5,14 @@ formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] - %(message)s')
 stdout_handler = logging.StreamHandler()
 stdout_handler.setFormatter(formatter)
 
-logging.basicConfig(level=logging.DEBUG, handlers=[stdout_handler])
-
-def get_logger():
-    logger = logging.getLogger('SERVER')
-    return logger
-
-LOG = get_logger()
+def setup_logging(args):
+    def level_verbosity():
+        if args.verbose:
+            return logging.DEBUG
+        elif args.quiet:
+            return logging.ERROR
+        else:
+            return logging.INFO
+        
+    logging.basicConfig(level=level_verbosity(), handlers=[stdout_handler])
+    logging.getLogger('SERVER')

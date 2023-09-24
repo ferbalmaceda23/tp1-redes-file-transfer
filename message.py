@@ -1,7 +1,7 @@
+import logging
 from flags import Flag
 from lib.commands import Command
-from lib.log import LOG
-from lib.constants import BUFFER_LEN
+from lib.constants import BUFFER_SIZE
 
 """
 command: [DOWNLOAD, UPLOAD]
@@ -46,10 +46,10 @@ class Message:
     @classmethod
     def decode(cls, bytes_arr: bytes):
         # Assuming 'command' is a single byte
-        try: 
+        try:
            command =  Command.from_values(bytes_arr[0])
         except ValueError:
-            LOG.error("Invalid command")
+            logging.error("Invalid command")
             raise ValueError("Invalid command")
 
         # Assuming 'flags' is 1 byte
@@ -61,7 +61,7 @@ class Message:
         # Assuming 'file_name' is a UTF-8 encoded string (up to 400 bytes)
         file_name_bytes = bytes_arr[6:406]
         file_name = file_name_bytes.decode().strip('\0')
-    
+        
         # Assuming 'seq_number' is a 32-bit integer (4 bytes)
         seq_number = int.from_bytes(bytes_arr[406:410], byteorder="big")
 
@@ -93,7 +93,7 @@ class Message:
         # relleno = b'0' * relleno_len
         # bytes_arr += relleno
         # append data from positoin 1024 to 2048
-        bytes_arr  += add_padding(self.data, BUFFER_LEN - len(bytes_arr))
+        bytes_arr  += add_padding(self.data, BUFFER_SIZE - len(bytes_arr))
         
         return bytes_arr
 
