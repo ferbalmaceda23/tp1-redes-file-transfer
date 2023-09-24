@@ -75,6 +75,9 @@ class Server:
             self.handle_download(decoded_msg, client_port, client_msg_queue)
         elif decoded_msg.command == Command.UPLOAD:
             self.handle_upload(decoded_msg, client_port, client_msg_queue)
+        else:
+            logging.info(f"Client {client_port}: unknown command, closing connection")
+            self.close_client_connection(decoded_msg.command, client_port)
 
     def send_HI_ACK(self, client_address, decoded_msg):
         self.socket.sendto(Message(decoded_msg.command, HI_ACK, 0, None, b"").encode(), client_address)
@@ -86,6 +89,11 @@ class Server:
         logging.info(f"Manejo descarga de {msg.file_name}")
 
     def handle_upload(self, msg, client_port, client_msg_queue):
+        '''
+        msg: is HI_ACK with UPLOAD command
+        client_port: is the port of the client that sent the HI_ACK
+        client_msg_queue: is the queue of messages of the client that sent the HI_ACK
+        '''
         if msg.file_name not in self.files:
             self.files.append(msg.file_name)
         else:
@@ -96,32 +104,37 @@ class Server:
         
         logging.info(f"Started receiving file: {msg.file_name}")
 
-        first_upload_msg = client_msg_queue.get(block=True, timeout=TIMEOUT)
-        msg = Message.decode(first_upload_msg)
-        logging.info(f"Client {client_port}: received {len(msg.data)} bytes, seq_number: {msg.seq_number}")
-        # chequear que el SEQ number es el ACK que queremos
+        msg = self.dequeue_encoded_msg(client_msg_queue) #first upload msg
+        self.log_received_msg(msg, client_port)
+        # wait for sqn = 0
         while msg.seq_number != ack_number - 1:
             self.socket.sendto(Message(msg.command, ACK, 0, None, b"", 0, 0).encode(), (LOCAL_HOST, client_port))
-            first_upload_msg = client_msg_queue.get(block=True, timeout=TIMEOUT)
-            msg = Message.decode(first_upload_msg)
-        ack_number += 1
-        file.write(msg.data)
+            msg = self.dequeue_encoded_msg(client_msg_queue)
+
         logging.info(f"Client file name: {msg.file_name }")
         with open(msg.file_name, "wb") as file:
             while msg.flags != CLOSE.encoded:
-                
-                encoded_message = client_msg_queue.get(block=True, timeout=TIMEOUT)
-                msg = Message.decode(encoded_message)
-                if msg.seq_number != ack_number -1:
-                    logging.info(f"Client {client_port}: received {len(msg.data)} bytes, seq_number: {msg.seq_number}")
-                    self.socket.sendto(Message(msg.command, ACK, 0, "", b"", 0, ack_number).encode(), (LOCAL_HOST, client_port))
+                if msg.seq_number != ack_number - 1: #it is not the expected sqn
+                    self.log_received_msg(msg, client_port)
+                    self.send_ack_sqn(msg, client_port, ack_number)
                     continue
                 else:
                     file.write(msg.data)
+                    self.log_received_msg(msg, client_port)
+                    self.send_ack_sqn(msg, client_port, ack_number)
                     ack_number += 1
-                    logging.info(f"Client {client_port}: received {len(msg.data)} bytes, seq_number: {msg.seq_number}")
-                    self.socket.sendto(Message(msg.command, ACK, 0, "", b"", 0, ack_number).encode(), (LOCAL_HOST, client_port))
-                sleep(1)
+                sleep(1) #es necesario?
+                msg = self.dequeue_encoded_msg(client_msg_queue)
+
+    def dequeue_encoded_msg(self, client_msg_queue):
+        encoded_msg = client_msg_queue.get(block=True, timeout=TIMEOUT)
+        return Message.decode(encoded_msg)
+
+    def send_ack_sqn(self, msg, client_port, ack_number):
+        self.socket.sendto(Message(msg.command, ACK, 0, "", b"", 0, ack_number).encode(), (LOCAL_HOST, client_port))
+
+    def log_received_msg(self, msg, client_port):
+        logging.info(f"Client {client_port}: received {len(msg.data)} bytes, seq_number: {msg.seq_number}")
 
 
 if __name__ == "__main__":

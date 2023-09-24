@@ -10,12 +10,12 @@ from lib.constants import DATA_SIZE
 from lib.file_controller import FileController
 
 def upload(client, path):
-    file_size = os.path.getsize(args.src)
+    file_name = args.src
+    file_size = os.path.getsize(file_name)
 
-    # TODO: usar el file controller para leer el archivo
-    file = FileController(args.src)
+    file = FileController(file_name)
     
-    with open(args.src, "rb") as file:
+    with open(file_name, "rb") as file:
         seq_number = 0
         data = file.read(DATA_SIZE)
         while file_size > 0:
@@ -29,11 +29,11 @@ def upload(client, path):
                         length, path, data, seq_number, 0)
             client.send(msg)
             logging.debug("Sent {} msg with seq_number".format(seq_number))
-            sleep(1)
+            sleep(1) #va?
             encoded_message, _ = client.receive()
             msg_received = Message.decode(encoded_message)
             if msg_received.ack_number <= seq_number:
-                print("DUPLICATE ACK RECEIVED")
+                print("DUPLICATED ACK RECEIVED")
                 client.send(msg)
                 continue
             else:
@@ -41,8 +41,6 @@ def upload(client, path):
                 seq_number += 1
                 file_size -= length
            
-            
-    #TODO agregar esperar al ACK
 
 
 if __name__ == "__main__":
