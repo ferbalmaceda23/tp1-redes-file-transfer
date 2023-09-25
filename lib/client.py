@@ -1,10 +1,11 @@
 import logging
 from socket import socket, AF_INET, SOCK_DGRAM
 from lib.exceptions import ServerConnectionError
-from lib.flags import HI, HI_ACK
+from lib.flags import HI_ACK
 from lib.constants import BUFFER_SIZE
 from lib.utils import select_protocol
 from lib.message import Message
+
 
 class Client:
     def __init__(self, ip, port, protocol):
@@ -12,29 +13,34 @@ class Client:
         self.port = port
         self.protocol = select_protocol(protocol)
 
-    # handshake start
+    # handshake
     def start(self, command, action):
         self.socket = socket(AF_INET, SOCK_DGRAM)
         self.socket.settimeout(3)
         self.protocol = self.protocol(self.socket)
-        hi_msg = Message(command, HI, 0, "", b"")
-        self.send(hi_msg)
-        print(hi_msg)
-        logging.info("Sent HI to server")
+
+        self.send_hi_ack_to_server(command)
+
         try:
             enconded_message, _ = self.socket.recvfrom(BUFFER_SIZE)
-            hi_msg = Message.decode(enconded_message)
-        except:
-            logging.error("Server is offline")
+            maybe_hi_ack = Message.decode(enconded_message)
+        except Exception as e:
+            logging.error(f"Server is offline: {e}")
             raise ServerConnectionError
-        if hi_msg.flags == HI_ACK.encoded:
-            self.send(Message(command, HI_ACK, 0, None, b""))
+
+        if maybe_hi_ack.flags == HI_ACK.encoded:
+            self.send(Message.hi_ack_msg(command))
             logging.info("Server is online")
-        # handshake
+
         action()
 
+    def send_hi_ack_to_server(self, command):
+        hi_msg = Message.hi_msg(command)
+        self.send(hi_msg)
+        logging.info("Sent HI to server")
+
     def send(self, message):
-        self.socket.sendto(message.encode(), (self.ip, self.port))
+        self.socket.sendto(message, (self.ip, self.port))
 
     def receive(self):
         return self.socket.recvfrom(BUFFER_SIZE)

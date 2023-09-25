@@ -1,5 +1,3 @@
-import logging
-import os
 import sys
 from lib.log import prepare_logging
 from lib.constants import LOCAL_HOST, LOCAL_PORT

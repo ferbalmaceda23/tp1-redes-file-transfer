@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class Command(Enum):
     DOWNLOAD = 1
     UPLOAD = 2
@@ -14,4 +15,3 @@ class Command(Enum):
 
     def get_bytes(self):
         return self.value.to_bytes(1, byteorder='big', signed=False)
-    
