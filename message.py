@@ -96,32 +96,3 @@ class Message:
         bytes_arr  += add_padding(self.data, BUFFER_SIZE - len(bytes_arr))
         
         return bytes_arr
-
-
-    # def encode(self):
-    #     # Encode the command as a single byte (e.g., 0 for DOWNLOAD, 1 for UPLOAD)
-    #     command_byte = bytes([0 if self.command == "DOWNLOAD" else 1])
-
-    #     # Encode the flags as a single byte where each bit represents a flag
-    #     flags_byte = 0
-    #     for flag in self.flags:
-    #         if flag == "HI":
-    #             flags_byte |= 1 << 0
-    #         elif flag == "CLOSE":
-    #             flags_byte |= 1 << 1
-    #         elif flag == "ACK":
-    #             flags_byte |= 1 << 2
-    #         elif flag == "CORRUPTED_PACKAGE":
-    #             flags_byte |= 1 << 3
-    #     flags_byte = bytes([flags_byte])
-
-    #     # Encode file_length as a 32-bit integer (4 bytes)
-    #     file_length_bytes = self.file_length.to_bytes(4, byteorder='big')
-
-    #     # Encode file_name as UTF-8 bytes
-    #     file_name_bytes = self.file_name.encode('utf-8')
-
-    #     # Combine all the encoded fields
-    #     encoded_message = command_byte + flags_byte + file_length_bytes + file_name_bytes + self.data
-
-    #     return encoded_message

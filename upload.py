@@ -3,24 +3,38 @@ from lib.log import prepare_logging
 from message import Command, Message
 from client import Client
 from lib.utils import parse_args_upload
-from lib.constants import DATA_SIZE, LOCAL_PORT, READ_MODE
+from lib.constants import LOCAL_PORT, READ_MODE, SELECTIVE_REPEAT
 from lib.file_controller import FileController
 from lib.commands import Command
 from lib.exceptions import DuplicatedACKError
 
 
-def upload(client):
+def upload_sw(protocol):
     file_controller = FileController.from_args(args, READ_MODE)
     data = file_controller.read()
     file_size = file_controller.get_file_size()
     while file_size > 0:
         data_length = len(data)
         try:
-            client.protocol.send(Command.UPLOAD, LOCAL_PORT, data, file_controller)
+            protocol.send(Command.UPLOAD, LOCAL_PORT, data, file_controller)
         except DuplicatedACKError:
+            continue
+        except TimeoutError:
+            print("Timeout!")
             continue
         data = file_controller.read()
         file_size -= data_length
+
+def upload_sr(protocol):
+    # TODO 
+    pass
+
+def upload(client):
+    if(client.protocol.name == SELECTIVE_REPEAT):
+        upload_sr(client.protocol)
+    else: 
+        upload_sw(client.protocol)
+    
 
     """
     while file_size > 0:

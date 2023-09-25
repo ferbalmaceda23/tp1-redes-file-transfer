@@ -1,23 +1,29 @@
 import logging
+import os
+import sys
 from lib.file_controller import FileController
 from lib.log import prepare_logging
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
 from queue import Queue
-from lib.constants import FIRST_SQN, READ_MODE, TIMEOUT, BUFFER_SIZE, LOCAL_HOST, LOCAL_PORT, WRITE_MODE
+from lib.constants import FIRST_SQN, READ_MODE, TIMEOUT, BUFFER_SIZE, LOCAL_HOST, LOCAL_PORT, WRITE_MODE, DEFAULT_FOLDER
 from flags import ACK, HI, HI_ACK, CLOSE
 from lib.commands import Command
 from message import Message
-from lib.utils import parse_args_upload, select_protocol
+from lib.utils import parse_args_server, select_protocol
 
 
 class Server:
-    def __init__(self, ip, port, protocol):
+    def __init__(self, ip, port, args):
         self.ip = ip
         self.port = port
         self.clients = {}
         self.files = []
-        self.protocol = select_protocol(protocol)
+        self.protocol = select_protocol(args.protocol)
+        self.storage = args.src if args.src is not None else DEFAULT_FOLDER
+
+        if not os.path.isdir(self.storage):
+            os.makedirs(self.storage, exist_ok=True)
 
     def start(self):
         self.socket = socket(AF_INET, SOCK_DGRAM)
@@ -84,12 +90,13 @@ class Server:
         self.socket.sendto(Message(command, CLOSE, 0, "", b"", 0, 0).encode(), client_address)
 
     def handle_download(self, client_port, client_msg_queue):
-        file_name = msg.file_name
-        file_controller = FileController.from_file_name(file_name, READ_MODE)
+        msg = self.dequeue_encoded_msg(client_msg_queue)
+        file_path = self.storage + msg.file_name
+        file_controller = FileController.from_file_name(file_path, READ_MODE)
         file_size = file_controller.get_file_size()
-    #TODO adaptar al send del protocolo
+
         while file_size > 0:
-            self.protocol.send(msg, client_port, file_controller.read())
+            self.protocol.send(msg, client_port, file_controller)
             msg = self.dequeue_encoded_msg(client_msg_queue)
             file_size -= BUFFER_SIZE
 
@@ -98,14 +105,12 @@ class Server:
         if msg.file_name not in self.files:
             self.files.append(msg.file_name)
         else:
-            logging.info(f"File {msg.file_name} already exists")
+            logging.error(f"File {msg.file_name} already exists")
             return
-        # wait for sqn = 0
-        while msg.seq_number != FIRST_SQN:
-            self.socket.sendto(Message(msg.command, ACK, 0, None, b"", 0, 0).encode(), (LOCAL_HOST, client_port))
-            msg = self.dequeue_encoded_msg(client_msg_queue)
 
-        logging.info(f"Uploading file to: {msg.file_name }")
+        file_path = os.path.join(self.storage, msg.file_name)
+
+        logging.info(f"Uploading file to: {file_path }")
         file_controller = FileController.from_file_name(msg.file_name, WRITE_MODE)
         while msg.flags != CLOSE.encoded:
             self.protocol.receive(msg, client_port, file_controller)
@@ -117,8 +122,12 @@ class Server:
 
 
 if __name__ == "__main__":
-    args = parse_args_upload()
-    prepare_logging(args)
-    server = Server(LOCAL_HOST, LOCAL_PORT, args.protocol)
+    try:
+        args = parse_args_server()
+        prepare_logging(args)
+        server = Server(LOCAL_HOST, LOCAL_PORT, args)
 
-    server.start()
+        server.start()
+    except KeyboardInterrupt:
+        print("\nExiting...")
+        sys.exit(0)
