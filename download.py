@@ -1,8 +1,8 @@
 from lib.commands import Command
 from lib.file_controller import FileController
-from message import Message
+from lib.message import Message
 import logging
-from client import Client
+from lib.client import Client
 from lib.utils import parse_args_download
 
 def download(client):

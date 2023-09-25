@@ -1,7 +1,7 @@
 import logging
-from flags import ACK, CLOSE, NO_FLAGS
+from lib.flags import ACK, CLOSE, NO_FLAGS
 from lib.constants import LOCAL_HOST, BUFFER_SIZE, STOP_AND_WAIT
-from message import Message
+from lib.message import Message
 from lib.exceptions import DuplicatedACKError
 import time
 
@@ -25,7 +25,7 @@ class StopAndWaitProtocol():
             file_controller.write_file(decoded_msg.data)
             self.log_received_msg(decoded_msg, port)
             ######### TEST
-            prueba = True
+            prueba = False
             if decoded_msg.seq_number == 4 and prueba:
                 print(f"prueba es {prueba} y decoded_msg es {decoded_msg.seq_number}")
                 time.sleep(6)

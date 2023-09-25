@@ -1,7 +1,7 @@
 import logging
 from lib.log import prepare_logging
-from message import Command, Message
-from client import Client
+from lib.message import Command, Message
+from lib.client import Client
 from lib.utils import parse_args_upload
 from lib.constants import LOCAL_PORT, READ_MODE, SELECTIVE_REPEAT
 from lib.file_controller import FileController
@@ -20,6 +20,7 @@ def upload_sw(protocol):
         except DuplicatedACKError:
             continue
         except TimeoutError:
+            logging.error("Timeout! Retrying...")
             print("Timeout!")
             continue
         data = file_controller.read()
