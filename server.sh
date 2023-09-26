@@ -1,2 +1,2 @@
 #!/bin/bash
-python3 start-server.py -v
+python3 start-server.py -s server-storage -v

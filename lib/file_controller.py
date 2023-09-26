@@ -41,5 +41,4 @@ class FileController():
         self.file.write(text)
 
     def get_file_size(self):
-        print("EL SELF SRC ES", self.src)
         return os.path.getsize(self.src)

@@ -56,7 +56,7 @@ class Server:
         client_port = client_address[1]
         logging.debug(
             f"Client {client_port}: wants to connect, sending confirmation, " +
-            "message type: {decoded_msg.command}")
+            f"message type: {decoded_msg.command}")
         self.send_HI_ACK(client_address, decoded_msg)
         try:
             encoded_message = msg_queue.get(block=True, timeout=300)
@@ -64,7 +64,7 @@ class Server:
 
             if decoded_msg.flags == HI_ACK.encoded:
                 self.init_file_transfer_operation(
-                    msg_queue, decoded_msg, client_port)
+                    msg_queue, decoded_msg, client_address)
             else:
                 self.close_client_connection(
                     decoded_msg.command, client_address)
@@ -81,13 +81,14 @@ class Server:
         self,
         client_msg_queue,
         decoded_msg,
-        client_port
+        client_address
     ):
+        client_port = client_address[1]
         logging.info(f"Client {client_port}: is online, message type:" +
                      f"{decoded_msg.command}")
         self.clients[client_port] = client_msg_queue
         if decoded_msg.command == Command.DOWNLOAD:
-            self.handle_download(client_port, client_msg_queue)
+            self.handle_download(client_address, client_msg_queue)
         elif decoded_msg.command == Command.UPLOAD:
             self.handle_upload(client_port, client_msg_queue)
         else:
@@ -103,13 +104,10 @@ class Server:
     def send_CLOSE(self, command, client_address):
         self.socket.sendto(Message.close_msg(command), client_address)
 
-    def handle_download(self, client_port, client_msg_queue):
-        logging.debug("ESPERANDO EL MENSAJE")
+    def handle_download(self, client_address, client_msg_queue):
+        client_port = client_address[1]
         msg = self.dequeue_encoded_msg(client_msg_queue)
-        logging.debug("LLEGA EL MENSAJE de la cola")
         command = msg.command
-
-        logging.debug(f"El file name es {msg.file_name}")
 
         file_path = os.path.join(self.storage, msg.file_name)
         if not os.path.exists(file_path):
@@ -119,17 +117,15 @@ class Server:
         file_controller = FileController.from_file_name(file_path, READ_MODE)
         data = file_controller.read()
         file_size = file_controller.get_file_size()
-        logging.info(f"EL FILE SIZE ES {file_size}")
 
         while file_size > 0:
-            logging.debug("ENTRA EN EL WHILE SEL SERVIDOR")
             # data = file_controller.read()
             # self.protocol.send(command, client_port, data, file_controller)
             # file_size -= len(data)
             data_length = len(data)
             try:
                 self.protocol.send(Command.DOWNLOAD, client_port, data,
-                                   file_controller)
+                                   file_controller, lambda: self.dequeue_encoded_msg(client_msg_queue))
             except DuplicatedACKError:
                 continue
             except TimeoutError:
@@ -139,19 +135,18 @@ class Server:
             data = file_controller.read()
             file_size -= data_length
 
-        self.protocol.send(command, client_port, CLOSE.encoded,
-                           file_controller)
+        self.send_CLOSE(command, client_address) 
 
     def handle_upload(self, client_port, client_msg_queue):
         msg = self.dequeue_encoded_msg(client_msg_queue)  # first upload msg
-        file_name = get_file_name(self.storage, msg.file_name)
-        logging.info(f"Uploading file to: {file_name}")
-        file_controller = FileController.from_file_name(file_name, WRITE_MODE)
+        file_name = get_file_name(msg.file_name)
+        file_path = os.path.join(self.storage, file_name)
+        logging.info(f"Uploading file to: {file_path }")
+        file_controller = FileController.from_file_name(file_path, WRITE_MODE)
 
         while msg.flags != CLOSE.encoded:
             self.protocol.receive(msg, client_port, file_controller)
             msg = self.dequeue_encoded_msg(client_msg_queue)
-        logging.info(f"File {file_name} uploaded successfully")
 
     def dequeue_encoded_msg(self, client_msg_queue):
         encoded_msg = client_msg_queue.get(block=True, timeout=TIMEOUT)

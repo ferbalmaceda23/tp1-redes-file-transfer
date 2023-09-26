@@ -24,11 +24,11 @@ def add_padding(data: bytes, n: int):
 
 
 class Message:
-    def __init__(self, command: Command, flags: Flag, file_length: int,
+    def __init__(self, command: Command, flags: Flag, data_length: int,
                  file_name: str, data: bytes, seq_number=0, ack_number=0):
         self.command = command
         self.flags = flags
-        self.file_length = file_length
+        self.data_length = data_length
         self.file_name = file_name
         self.seq_number = seq_number
         self.ack_number = ack_number
@@ -39,11 +39,10 @@ class Message:
             f"Message: "
             f"command={self.command}, "
             f"flags={self.flags}, "
-            f"file_length={self.file_length}, "
+            f"data_length={self.data_length}, "
             f"file_name={self.file_name}, "
             f"seq_number={self.seq_number}, "
             f"ack_number={self.ack_number}, "
-            f"data_length={len(self.data)} bytes"
         )
 
     @classmethod
@@ -59,7 +58,7 @@ class Message:
         flags = bytes_arr[1]
 
         # Assuming 'file_length' is a 32-bit integer (4 bytes)
-        f_length = int.from_bytes(bytes_arr[2:6], byteorder="big")
+        f_data = int.from_bytes(bytes_arr[2:6], byteorder="big")
 
         # Assuming 'file_name' is a UTF-8 encoded string (up to 400 bytes)
         file_name_bytes = bytes_arr[6:406]
@@ -72,15 +71,15 @@ class Message:
         ack_n = int.from_bytes(bytes_arr[410:414], byteorder="big")
 
         # Assuming 'data' is the remaining bytes after the previous fields
-        data = bytes_arr[414: 414 + f_length]
+        data = bytes_arr[414: 414 + f_data]
 
-        return Message(command, flags, f_length, f_name, data, seq_n, ack_n)
+        return Message(command, flags, f_data, f_name, data, seq_n, ack_n)
 
     def encode(self):
         bytes_arr = b""
         bytes_arr += self.command.get_bytes()
         bytes_arr += self.flags.get_bytes()
-        bytes_arr += self.file_length.to_bytes(4,
+        bytes_arr += self.data_length.to_bytes(4,
                                                signed=False, byteorder='big')
 
         if self.file_name is not None:

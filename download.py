@@ -6,7 +6,8 @@ from lib.log import prepare_logging
 from lib.constants import LOCAL_PORT
 from lib.client import Client
 from lib.utils import parse_args_download
-from lib.flags import CLOSE, NO_FLAGS
+from lib.flags import CLOSE, NO_FLAGS, ACK
+import sys
 import logging
 
 
@@ -14,7 +15,6 @@ def download(client, args):
     file_controller = FileController.from_args(args.dst, args.name, WRITE_MODE)
     msg_to_send = Message(Command.DOWNLOAD, NO_FLAGS, 0, args.name, b"")
     # msg_to_send = Message.download_msg(args.name)
-    logging.info("Enviando mensaje para comenzar descarga al servidor :)")
     client.send(msg_to_send.encode())
     ack_number = 1
 
@@ -31,15 +31,22 @@ def download(client, args):
             ack_number += 1
         encoded_messge, _ = client.receive()
         message = Message.decode(encoded_messge)
+    logging.info("Finished download")
 
 
 def send_ack(socket, command, ack_number, port):
-    ack_msg = Message.ack_msg(command, ack_number)
-    socket.sendto(ack_msg, (LOCAL_HOST, port))
+    #ack_msg = Message.ack_msg(command, ack_number)
+    ack_msg = Message(command, ACK, 0, "", b"", 0, ack_number)
+    socket.sendto(ack_msg.encode(), (LOCAL_HOST, port))
 
 
 if __name__ == "__main__":
-    args = parse_args_download()
-    prepare_logging(args)
-    client = Client(args.host, args.port, args.protocol)
-    client.start(Command.DOWNLOAD, lambda: download(client, args))
+    try:
+        args = parse_args_download()
+        prepare_logging(args)
+        client = Client(args.host, args.port, args.protocol)
+        client.start(Command.DOWNLOAD, lambda: download(client, args))
+    except KeyboardInterrupt:
+        print("\nExiting...")
+        sys.exit(0)
+
