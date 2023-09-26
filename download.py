@@ -35,7 +35,7 @@ def download(client, args):
 
 
 def send_ack(socket, command, ack_number, port):
-    #ack_msg = Message.ack_msg(command, ack_number)
+    # ack_msg = Message.ack_msg(command, ack_number)
     ack_msg = Message(command, ACK, 0, "", b"", 0, ack_number)
     socket.sendto(ack_msg.encode(), (LOCAL_HOST, port))
 
@@ -44,9 +44,8 @@ if __name__ == "__main__":
     try:
         args = parse_args_download()
         prepare_logging(args)
-        client = Client(args.host, args.port, args.protocol)
+        client = Client(args.host, args.port, args.RDTprotocol)
         client.start(Command.DOWNLOAD, lambda: download(client, args))
     except KeyboardInterrupt:
         print("\nExiting...")
         sys.exit(0)
-

@@ -30,7 +30,9 @@ class SelectiveRepeatProtocol():
                 msg_received = Message.decode(maybe_ack)
                 if msg_received.flags == ACK:
                     with self.not_acknowledged_lock:
-                        self.not_acknowledged -= 1
+                        if self.not_acknowledged > 0:
+                            self.not_acknowledged -= 1
+                            print(f"not_acknowledged DECREMENTED: {self.not_acknowledged}")
                     self.log_received_msg(msg_received, LOCAL_PORT)
                     if msg_received.ack_number == self.send_base:
                         self.move_send_window()
@@ -89,7 +91,7 @@ class SelectiveRepeatProtocol():
             with self.not_acknowledged_lock:
                 self.not_acknowledged += 1
         else:
-            logging.debug("Window is full, waiting for ACKs...")
+            # logging.debug("Window is full, waiting for ACKs...")
             raise WindowFullError
 
     def upload(self, args):
@@ -128,9 +130,10 @@ class SelectiveRepeatProtocol():
     def set_window_size(self, number_of_packets):
         self.window_size = self.calculate_window_size(number_of_packets)
         self.max_sqn = number_of_packets - 1
+        print(f"Window size: {self.window_size}")
 
     def calculate_window_size(self, number_of_packets):
-        return number_of_packets/2
+        return int(number_of_packets/2)
 
     def log_received_msg(self, msg, port):  # TODO pasar a otro archivo
         logging.info(
@@ -145,4 +148,5 @@ class SelectiveRepeatProtocol():
         # ack_msg = Message.ack_msg(command, self.ack_num)
         # self.socket.sendto(ack_msg, (LOCAL_HOST, port))
         msg = Message(command, ACK, 0, "", b"", 0, ack_number)
+        print(f"Sending ACK: {ack_number}")
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))

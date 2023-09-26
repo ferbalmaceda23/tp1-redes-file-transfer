@@ -13,7 +13,7 @@ if __name__ == "__main__":
     try:
         args = parse_args_upload()
         prepare_logging(args)
-        client = Client(args.host, args.port, args.protocol)
+        client = Client(args.host, args.port, args.RDTprotocol)
         client.start(Command.UPLOAD, lambda: upload(client))
     except KeyboardInterrupt:
         print("\nExiting...")

@@ -113,8 +113,8 @@ def add_args(parser):
 
     parser.add_argument(
         "-pr",
-        "--protocol",
-        help="stop_and_wait or selective_repeat",
+        "--RDTprotocol",
+        help="stop_and_wait (sw) or selective_repeat (sr)",
         action="store",
         type=str
     )
@@ -133,8 +133,8 @@ def validate_args_upload(parser):
         args.port = 8080
     if args.name is None:
         args.name = args.src.split("/")[-1]
-    if args.protocol is None:
-        args.protocol = STOP_AND_WAIT
+    if args.RDTprotocol is None:
+        args.RDTprotocol = STOP_AND_WAIT
 
     return args
 
@@ -150,8 +150,8 @@ def validate_args_download(parser):
         args.host = "localhost"
     if args.port is None:
         args.port = 8080
-    if args.protocol is None:
-        args.protocol = STOP_AND_WAIT
+    if args.RDTprotocol is None:
+        args.RDTprotocol = STOP_AND_WAIT
 
     return args
 
@@ -167,8 +167,8 @@ def validate_args_server(parser):
         args.host = "localhost"
     if args.port is None:
         args.port = 8080
-    if args.protocol is None:
-        args.protocol = STOP_AND_WAIT
+    if args.RDTprotocol is None:
+        args.RDTprotocol = STOP_AND_WAIT
 
     return args
 

@@ -18,7 +18,7 @@ class Server:
         self.ip = ip
         self.port = port
         self.clients = {}
-        self.protocol = select_protocol(args.protocol)
+        self.protocol = select_protocol(args.RDTprotocol)
         storage = args.storage
         self.storage = storage if storage is not None else DEFAULT_FOLDER
 
@@ -140,6 +140,7 @@ class Server:
 
     def handle_upload(self, client_port, client_msg_queue):
         msg = self.dequeue_encoded_msg(client_msg_queue)  # first upload msg
+        print("first msg" + msg)
         file_name = get_file_name(msg.file_name)
         file_path = os.path.join(self.storage, file_name)
         logging.info(f"Uploading file to: {file_path }")
@@ -150,5 +151,7 @@ class Server:
             msg = self.dequeue_encoded_msg(client_msg_queue)
 
     def dequeue_encoded_msg(self, client_msg_queue):
+        print("dequeue")
         encoded_msg = client_msg_queue.get(block=True, timeout=TIMEOUT)
+        print("dequeue" + encoded_msg)
         return Message.decode(encoded_msg)
