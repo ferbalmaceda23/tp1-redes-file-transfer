@@ -103,18 +103,32 @@ class Server:
         self.socket.sendto(Message.close_msg(command), client_address)
 
     def handle_download(self, client_port, client_msg_queue):
+        logging.debug("ESPERANDO EL MENSAJE")
         msg = self.dequeue_encoded_msg(client_msg_queue)
+        logging.debug("LLEGA EL MENSAJE de la cola")
         command = msg.command
+
+        logging.debug(f"El file name es {msg.file_name}")
 
         file_path = os.path.join(self.storage, msg.file_name)
         if not os.path.exists(file_path):
             self.protocol.send_error(command, client_port, ERROR_EXISTING_FILE)
             logging.error(f"File {msg.file_name} does not exist, try again")
             return
+        logging.info("crea el file controller")
+        print(f"el file path es {file_path}")
         file_controller = FileController.from_file_name(file_path, READ_MODE)
+        #file_controller = FileController()
+        #file_controller = FileController.src = file_path
+        ""
+        logging.info("creado")
+        logging.info("obteniendo el file size")
         file_size = file_controller.get_file_size()
+        logging.info(f"EL FILE SIZE ES {file_size}")
 
+        logging.info("por entrar al while")
         while file_size > 0:
+            logging.debug("ENTRA EN EL WHILE SEL SERVIDOR")
             data = file_controller.read()
             self.protocol.send(command, client_port, data, file_controller)
             file_size -= len(data)

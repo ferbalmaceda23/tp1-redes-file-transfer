@@ -100,7 +100,7 @@ class Message:
 
     @classmethod
     def ack_msg(cls, command, ack_num):
-        msg = Message(command, ACK, EMPTY_FILE, None, EMPTY_DATA, 0, ack_num)
+        msg = Message(command, ACK, EMPTY_FILE, None, EMPTY_DATA, 0, ack_number=ack_num)
         return msg.encode()
 
     @classmethod

@@ -28,7 +28,7 @@ def parse_args_upload():
         type=str
     )
 
-    return validate_args(parser)
+    return validate_args_upload(parser)
 
 
 def parse_args_server():
@@ -67,7 +67,7 @@ def parse_args_download():
         type=str
     )
 
-    return validate_args(parser)
+    return validate_args_download(parser)
 
 
 def add_args(parser):
@@ -120,7 +120,7 @@ def add_args(parser):
     )
 
 
-def validate_args(parser):
+def validate_args_upload(parser):
     args = parser.parse_args()
 
     if args.verbose:
@@ -138,6 +138,21 @@ def validate_args(parser):
 
     return args
 
+def validate_args_download(parser):
+    args = parser.parse_args()
+
+    if args.verbose:
+        print("verbosity turned on")
+    if args.quiet:
+        print("quiet turned on")
+    if args.host is None:
+        args.host = "localhost"
+    if args.port is None:
+        args.port = 8080
+    if args.protocol is None:
+        args.protocol = STOP_AND_WAIT
+
+    return args
 
 def validate_args_server(parser):
     args = parser.parse_args()
