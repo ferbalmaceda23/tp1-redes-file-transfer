@@ -10,15 +10,15 @@ from lib.message import Message
 
 
 class SelectiveRepeatProtocol():
-    def __init__(self, socket, N):
+    def __init__(self, socket):
         self.socket = socket
         self.seq_num = 0
         self.name = SELECTIVE_REPEAT
         self.send_base = 0  # it is the first packet in the window == its sqn
         self.rcv_base = 0
-        self.window_size = N
+        self.window_size = 0
         self.max_sqn = 0
-        self.buffer = {}
+        self.buffer = []
         self.not_acknowledged = 0  # n° packets sent but not acknowledged yet
         self.not_acknowledged_lock = threading.Lock()
 
@@ -45,23 +45,33 @@ class SelectiveRepeatProtocol():
         encoded_message, _ = self.socket.recvfrom(BUFFER_SIZE)
         return encoded_message
 
-    def receive(self, decoded_msg, port, file):
+    def receive(self, decoded_msg, port, file_controller):
         if decoded_msg.seq_number == self.rcv_base:  # it is the expected sqn
-            file.write_file(decoded_msg.data)
+            file_controller.write_file(decoded_msg.data)
             self.log_received_msg(decoded_msg, port)
-            self.move_rcv_window()
-            self.delete_from_buffer(decoded_msg)
+            # self.move_rcv_window()
+            self.reset_buffer()
         elif self.packet_is_within_window(decoded_msg):
             # it is not the expected sqn order but it is within the window
-            self.buffer[decoded_msg.seq_number] = decoded_msg
+            self.buffer.append(decoded_msg)
         # otherwise it is not within the window and it is discarded
         # TODO in this case handle timeout in the client
 
         self.send_ack(decoded_msg.command, port, decoded_msg.seq_number)
 
-    def delete_from_buffer(self, decoded_msg):
-        if decoded_msg.seq_number in self.buffer:
-            del self.buffer[decoded_msg.seq_number]
+    def reset_buffer(self, file_controller):
+        # write only those buffered pkt that are in order with the base
+        # Those who are not in order correspond to other packet loss
+        base = self.rcv_base
+        for packet in self.buffer:
+            if packet == base+1:
+                file_controller.write_file(packet.data)
+                self.buffer.pop(packet)
+                base += 1
+            else:
+                break
+
+        self.move_rcv_window(base - self.rcv_base)
 
     def packet_is_within_window(self, decoded_msg):
         max_w_size = self.window_size-1  # TODO revisar -1
@@ -108,9 +118,9 @@ class SelectiveRepeatProtocol():
                            (LOCAL_HOST, LOCAL_PORT))
         ack_thread.join()
 
-    def move_rcv_window(self):
+    def move_rcv_window(self, shift=1):
         if self.rcv_base + self.window_size-1 != self.max_sqn:
-            self.rcv_base += 1
+            self.rcv_base += shift
 
     def move_send_window(self):
         if self.send_base + self.window_size-1 != self.max_sqn:
