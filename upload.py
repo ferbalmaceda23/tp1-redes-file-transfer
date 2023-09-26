@@ -1,3 +1,4 @@
+import logging
 from lib.log import prepare_logging
 from lib.message import Command
 from lib.client import Client
@@ -18,4 +19,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nExiting...")
         sys.exit(0)
-
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
+        sys.exit(1)
