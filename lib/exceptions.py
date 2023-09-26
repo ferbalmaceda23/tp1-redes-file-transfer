@@ -6,6 +6,10 @@ class ClientConnectionError(Exception):
     pass
 
 
+class FileOpenException(Exception):
+    pass
+
+
 class FileReadingError(Exception):
     pass
 

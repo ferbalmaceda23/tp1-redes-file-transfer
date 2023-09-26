@@ -12,20 +12,14 @@ import logging
 
 def download(client, args):
     file_controller = FileController.from_args(args.dst, args.name, WRITE_MODE)
-    msg_to_send = Message(Command.DOWNLOAD, NO_FLAGS, 0,
-                      args.name, b"")
-    #msg_to_send = Message.download_msg(args.name)
+    msg_to_send = Message(Command.DOWNLOAD, NO_FLAGS, 0, args.name, b"")
+    # msg_to_send = Message.download_msg(args.name)
     logging.info("Enviando mensaje para comenzar descarga al servidor :)")
     client.send(msg_to_send.encode())
     ack_number = 1
-    logging.info("Enviado")
-    
-    logging.info("esperando recibir del servidor :)")
+
     encoded_messge, _ = client.receive()
     message = Message.decode(encoded_messge)
-    logging.info("recibido")
-    # server debe mandar el tamaño total del archivo para poder
-    # finalizar el while
     while message.flags != CLOSE.encoded:
         if message.seq_number > ack_number - 1:
             logging.error("Not expected sqn")

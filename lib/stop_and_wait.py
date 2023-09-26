@@ -1,5 +1,4 @@
 import logging
-import time
 from lib.commands import Command
 from lib.file_controller import FileController
 from lib.flags import ACK, NO_FLAGS
@@ -19,7 +18,8 @@ class StopAndWaitProtocol():
     def send_ack(self, command, port):
         # ack_msg = Message.ack_msg(command, self.ack_num)
         # self.socket.sendto(ack_msg, (LOCAL_HOST, port))
-        self.socket.sendto(Message(command, ACK, 0, "", b"", 0, self.ack_num).encode(), (LOCAL_HOST, port))
+        msg = Message(command, ACK, 0, "", b"", 0, self.ack_num)
+        self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
 
     def receive(self, decoded_msg, port, file_controller):
         print(

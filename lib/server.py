@@ -1,5 +1,6 @@
 import logging
 import os
+from lib.exceptions import DuplicatedACKError
 from lib.file_controller import FileController
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
@@ -115,23 +116,28 @@ class Server:
             self.protocol.send_error(command, client_port, ERROR_EXISTING_FILE)
             logging.error(f"File {msg.file_name} does not exist, try again")
             return
-        logging.info("crea el file controller")
-        print(f"el file path es {file_path}")
         file_controller = FileController.from_file_name(file_path, READ_MODE)
-        #file_controller = FileController()
-        #file_controller = FileController.src = file_path
-        ""
-        logging.info("creado")
-        logging.info("obteniendo el file size")
+        data = file_controller.read()
         file_size = file_controller.get_file_size()
         logging.info(f"EL FILE SIZE ES {file_size}")
 
-        logging.info("por entrar al while")
         while file_size > 0:
             logging.debug("ENTRA EN EL WHILE SEL SERVIDOR")
+            # data = file_controller.read()
+            # self.protocol.send(command, client_port, data, file_controller)
+            # file_size -= len(data)
+            data_length = len(data)
+            try:
+                self.protocol.send(Command.DOWNLOAD, client_port, data,
+                                   file_controller)
+            except DuplicatedACKError:
+                continue
+            except TimeoutError:
+                logging.error("Timeout! Retrying...")
+                print("Timeout!")
+                continue
             data = file_controller.read()
-            self.protocol.send(command, client_port, data, file_controller)
-            file_size -= len(data)
+            file_size -= data_length
 
         self.protocol.send(command, client_port, CLOSE.encoded,
                            file_controller)
