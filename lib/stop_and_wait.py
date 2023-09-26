@@ -47,14 +47,9 @@ class StopAndWaitProtocol():
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
         self.log_sent_msg(msg)
 
-    def send(self, command, port, data, file_controller):
-        length = len(data)
-        if not data:
-            self.socket.sendto(Message.close_msg(command), (LOCAL_HOST, port))
-            return
-
+    def send(self, command, port, data, file_controller):    
         msg = Message(command, NO_FLAGS,
-                      length, file_controller.file_name, data, self.seq_num, 0)
+                      len(data), file_controller.file_name, data, self.seq_num, 0)
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
         self.log_sent_msg(msg)
         try:
@@ -85,6 +80,7 @@ class StopAndWaitProtocol():
                 continue
             data = f_controller.read()
             file_size -= data_length
+        self.socket.sendto(Message.close_msg(Command.UPLOAD), (LOCAL_HOST, self.port))
 
     def log_received_msg(self, msg, port):
         logging.info(
