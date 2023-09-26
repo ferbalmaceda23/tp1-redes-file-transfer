@@ -49,8 +49,7 @@ class SelectiveRepeatProtocol():
         if decoded_msg.seq_number == self.rcv_base:  # it is the expected sqn
             file_controller.write_file(decoded_msg.data)
             self.log_received_msg(decoded_msg, port)
-            # self.move_rcv_window()
-            self.reset_buffer()
+            self.process_buffer()
         elif self.packet_is_within_window(decoded_msg):
             # it is not the expected sqn order but it is within the window
             self.buffer.append(decoded_msg)
@@ -59,19 +58,19 @@ class SelectiveRepeatProtocol():
 
         self.send_ack(decoded_msg.command, port, decoded_msg.seq_number)
 
-    def reset_buffer(self, file_controller):
+    def process_buffer(self, file_controller):
         # write only those buffered pkt that are in order with the base
         # Those who are not in order correspond to other packet loss
-        base = self.rcv_base
+        next_base = self.rcv_base + 1
         for packet in self.buffer:
-            if packet == base+1:
+            if packet == next_base:
                 file_controller.write_file(packet.data)
                 self.buffer.pop(packet)
-                base += 1
+                next_base += 1
             else:
                 break
 
-        self.move_rcv_window(base - self.rcv_base)
+        self.move_rcv_window(next_base - self.rcv_base)
 
     def packet_is_within_window(self, decoded_msg):
         max_w_size = self.window_size-1  # TODO revisar -1
@@ -118,7 +117,7 @@ class SelectiveRepeatProtocol():
                            (LOCAL_HOST, LOCAL_PORT))
         ack_thread.join()
 
-    def move_rcv_window(self, shift=1):
+    def move_rcv_window(self, shift):
         if self.rcv_base + self.window_size-1 != self.max_sqn:
             self.rcv_base += shift
 
