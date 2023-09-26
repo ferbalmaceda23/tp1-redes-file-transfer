@@ -13,13 +13,12 @@ class SelectiveRepeatProtocol():
     def __init__(self, socket, N):
         self.socket = socket
         self.seq_num = 0
-        self.ack_num = -1  # start with -1 bc first ack will be 0
         self.name = SELECTIVE_REPEAT
         self.send_base = 0  # it is the first packet in the window == its sqn
         self.rcv_base = 0
         self.window_size = N
         self.max_sqn = 0
-        self.buffer = []
+        self.buffer = {}
         self.not_acknowledged = 0  # n° packets sent but not acknowledged yet
         self.not_acknowledged_lock = threading.Lock()
 
@@ -34,11 +33,7 @@ class SelectiveRepeatProtocol():
                         self.not_acknowledged -= 1
                     self.log_received_msg(msg_received, LOCAL_PORT)
                     if msg_received.ack_number == self.send_base:
-                        if self.send_base + self.window_size-1 != self.max_sqn:
-                            self.move_send_window()
-                        else:
-                            logging.debug("Wont move window" +
-                                          "because max was reached")
+                        self.move_send_window()
                     else:
                         logging.debug(
                             f"Received messy ACK: {msg_received.ack_number}")
@@ -51,7 +46,28 @@ class SelectiveRepeatProtocol():
         return encoded_message
 
     def receive(self, decoded_msg, port, file):
-        pass
+        if decoded_msg.seq_number == self.rcv_base:  # it is the expected sqn
+            file.write_file(decoded_msg.data)
+            self.log_received_msg(decoded_msg, port)
+            self.move_rcv_window()
+            self.delete_from_buffer(decoded_msg)
+        elif self.packet_is_within_window(decoded_msg):
+            # it is not the expected sqn order but it is within the window
+            self.buffer[decoded_msg.seq_number] = decoded_msg
+        # otherwise it is not within the window and it is discarded
+        # TODO in this case handle timeout in the client
+
+        self.send_ack(decoded_msg.command, port, decoded_msg.seq_number)
+
+    def delete_from_buffer(self, decoded_msg):
+        if decoded_msg.seq_number in self.buffer:
+            del self.buffer[decoded_msg.seq_number]
+
+    def packet_is_within_window(self, decoded_msg):
+        max_w_size = self.window_size-1  # TODO revisar -1
+        is_before_max = decoded_msg.seq_number <= self.rcv_base + max_w_size
+        is_after_base = decoded_msg.seq_number > self.rcv_base
+        return is_after_base and is_before_max
 
     def send(self, command, port, data, file_controller):
         # TODO ver si aca va lock, creo q no:
@@ -70,6 +86,7 @@ class SelectiveRepeatProtocol():
     def upload(self, args):
         f_controller = FileController.from_args(args.src, args.name, READ_MODE)
         file_size = f_controller.get_file_size()
+        # FIXME no se si esta bien asi:
         self.set_window_size(int(file_size/BUFFER_SIZE))
         data = f_controller.read()
         ack_thread = threading.Thread(target=self.receive_acks)
@@ -92,10 +109,12 @@ class SelectiveRepeatProtocol():
         ack_thread.join()
 
     def move_rcv_window(self):
-        self.rcv_base += 1
+        if self.rcv_base + self.window_size-1 != self.max_sqn:
+            self.rcv_base += 1
 
     def move_send_window(self):
-        self.send_base += 1
+        if self.send_base + self.window_size-1 != self.max_sqn:
+            self.send_base += 1
 
     def set_window_size(self, number_of_packets):
         self.window_size = self.calculate_window_size(number_of_packets)
@@ -112,3 +131,9 @@ class SelectiveRepeatProtocol():
     def log_sent_msg(self, msg):
         logging.debug(
             f"Sent {msg} msg with seq_number {self.seq_num}")
+
+    def send_ack(self, command, port, ack_number):
+        # ack_msg = Message.ack_msg(command, self.ack_num)
+        # self.socket.sendto(ack_msg, (LOCAL_HOST, port))
+        msg = Message(command, ACK, 0, "", b"", 0, ack_number)
+        self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
