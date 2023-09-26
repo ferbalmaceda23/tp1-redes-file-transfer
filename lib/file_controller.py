@@ -1,22 +1,32 @@
 import logging
 import os
 from lib.constants import DATA_SIZE
-from lib.exceptions import FileReadingError
+from lib.exceptions import FileOpenException, FileReadingError
+
 
 class FileController():
     @classmethod
     def from_file_name(self, file_name, mode):
         file_controller = FileController()
-        file_controller.file_name  = file_name
-        file_controller.file = open(file_name, mode)
+        file_controller.file_name = file_name
+        self.src = file_name
+        try:
+            file_controller.file = open(self.src, mode)
+        except Exception as e:
+            logging.error(f'Error opening file {self.src}, error: {e}')
+            raise FileOpenException
         return file_controller
-    
+
     @classmethod
-    def from_args(self, args, mode):
+    def from_args(self, src, name, mode):
         file_controller = FileController()
-        file_controller.src = args.src
-        file_controller.file_name = args.name
-        file_controller.file = open(file_controller.src, mode)
+        self.src = src
+        file_controller.file_name = name
+        try:
+            file_controller.file = open(self.src, mode)
+        except Exception as e:
+            logging.error(f'Error opening file {self.src}, error: {e}')
+            raise FileOpenException
         return file_controller
 
     def read(self):
@@ -29,6 +39,6 @@ class FileController():
 
     def write_file(self, text):
         self.file.write(text)
-    
+
     def get_file_size(self):
         return os.path.getsize(self.src)

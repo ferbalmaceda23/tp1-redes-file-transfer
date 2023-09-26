@@ -1,5 +1,3 @@
-import logging
-import os
 import sys
 from lib.log import prepare_logging
 from lib.constants import LOCAL_HOST, LOCAL_PORT
@@ -11,7 +9,6 @@ if __name__ == "__main__":
         args = parse_args_server()
         prepare_logging(args)
         server = Server(LOCAL_HOST, LOCAL_PORT, args)
-
         server.start()
     except KeyboardInterrupt:
         print("\nExiting...")

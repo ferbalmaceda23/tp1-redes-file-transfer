@@ -14,5 +14,9 @@ FIRST_SQN = 0
 
 WRITE_MODE = "wb"
 READ_MODE = "rb"
+EMPTY_FILE = 0
+EMPTY_DATA = b""
 
 DEFAULT_FOLDER = 'saved-files'
+
+ERROR_EXISTING_FILE = "File already exists"
