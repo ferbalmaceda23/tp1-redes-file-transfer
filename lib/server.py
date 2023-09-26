@@ -152,6 +152,7 @@ class Server:
         while msg.flags != CLOSE.encoded:
             self.protocol.receive(msg, client_port, file_controller)
             msg = self.dequeue_encoded_msg(client_msg_queue)
+        logging.info(f"File {file_name} uploaded successfully")
 
     def dequeue_encoded_msg(self, client_msg_queue):
         encoded_msg = client_msg_queue.get(block=True, timeout=TIMEOUT)
