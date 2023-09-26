@@ -125,7 +125,9 @@ class Server:
             data_length = len(data)
             try:
                 self.protocol.send(Command.DOWNLOAD, client_port, data,
-                                   file_controller, lambda: self.dequeue_encoded_msg(client_msg_queue))
+                                   file_controller,
+                                   lambda: self.dequeue_encoded_msg(
+                                       client_msg_queue))
             except DuplicatedACKError:
                 continue
             except TimeoutError:
@@ -135,11 +137,11 @@ class Server:
             data = file_controller.read()
             file_size -= data_length
 
-        self.send_CLOSE(command, client_address) 
+        self.send_CLOSE(command, client_address)
 
     def handle_upload(self, client_port, client_msg_queue):
         msg = self.dequeue_encoded_msg(client_msg_queue)  # first upload msg
-        file_name = get_file_name(msg.file_name)
+        file_name = get_file_name(self.storage, msg.file_name)
         file_path = os.path.join(self.storage, file_name)
         logging.info(f"Uploading file to: {file_path }")
         file_controller = FileController.from_file_name(file_path, WRITE_MODE)

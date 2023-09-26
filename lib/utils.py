@@ -181,7 +181,7 @@ def get_file_name(dir, file_name):
     new_name = f"{dir}/{file_name_base}{extension}"
 
     while os.path.exists(new_name):
-        new_name = f"{dir}/{file_name_base}_{i}{extension}"
+        new_name = f"{file_name_base}_{i}{extension}"
         i += 1
 
     return new_name
