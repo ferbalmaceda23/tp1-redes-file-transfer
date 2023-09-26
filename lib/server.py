@@ -104,9 +104,9 @@ class Server:
     def send_CLOSE(self, command, client_address):
         self.socket.sendto(Message.close_msg(command), client_address)
 
-    def handle_download(self, client_address, client_msg_queue):
+    def handle_download(self, client_address, msg_queue):
         client_port = client_address[1]
-        msg = self.dequeue_encoded_msg(client_msg_queue)
+        msg = self.dequeue_encoded_msg(msg_queue)
         command = msg.command
 
         file_path = os.path.join(self.storage, msg.file_name)
@@ -125,7 +125,8 @@ class Server:
             data_length = len(data)
             try:
                 self.protocol.send(Command.DOWNLOAD, client_port, data,
-                                   file_controller, lambda: self.dequeue_encoded_msg(client_msg_queue))
+                                   file_controller,
+                                   lambda: self.dequeue_encoded_msg(msg_queue))
             except DuplicatedACKError:
                 continue
             except TimeoutError:
@@ -135,7 +136,7 @@ class Server:
             data = file_controller.read()
             file_size -= data_length
 
-        self.send_CLOSE(command, client_address) 
+        self.send_CLOSE(command, client_address)
 
     def handle_upload(self, client_port, client_msg_queue):
         msg = self.dequeue_encoded_msg(client_msg_queue)  # first upload msg

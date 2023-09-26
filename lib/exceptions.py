@@ -16,3 +16,7 @@ class FileReadingError(Exception):
 
 class DuplicatedACKError(Exception):
     pass
+
+
+class WindowFullError(Exception):
+    pass
