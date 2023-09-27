@@ -23,7 +23,7 @@ def download(client, args):
     while message.flags != CLOSE.encoded:
         if message.seq_number > ack_number - 1:
             logging.error("Not expected sqn")
-            send_ack(client.socket, Command.DOWNLOAD, ack_number-1, LOCAL_PORT)
+            send_ack(client.socket, Command.DOWNLOAD, ack_number - 1, LOCAL_PORT)
         else:
             logging.info("Received message with sqn: %s", message.seq_number)
             file_controller.write_file(message.data)
@@ -36,6 +36,7 @@ def download(client, args):
 
 def send_ack(socket, command, ack_number, port):
     # ack_msg = Message.ack_msg(command, ack_number)
+    # ack_msg = Message.ack_msg(command, ack_number)
     ack_msg = Message(command, ACK, 0, "", b"", 0, ack_number)
     socket.sendto(ack_msg.encode(), (LOCAL_HOST, port))
 
@@ -47,5 +48,8 @@ if __name__ == "__main__":
         client = Client(args.host, args.port, args.RDTprotocol)
         client.start(Command.DOWNLOAD, lambda: download(client, args))
     except KeyboardInterrupt:
-        print("\nExiting...")
+        logging.info("\nExiting...")
         sys.exit(0)
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
+        sys.exit(1)
