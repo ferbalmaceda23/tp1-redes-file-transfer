@@ -16,7 +16,7 @@ class Client:
     # handshake
     def start(self, command, action):
         self.socket = socket(AF_INET, SOCK_DGRAM)
-        #self.socket.settimeout(3)
+        # self.socket.settimeout(3)
         self.protocol = self.protocol(self.socket)
 
         self.send_hi_ack_to_server(command)
