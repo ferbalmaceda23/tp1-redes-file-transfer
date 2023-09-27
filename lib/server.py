@@ -149,7 +149,7 @@ class Server:
             msg = self.dequeue_encoded_msg(client_msg_queue)
 
     def dequeue_encoded_msg(self, client_msg_queue):
-        print("dequeue")
+        print('dequeue')
         encoded_msg = client_msg_queue.get(block=True, timeout=TIMEOUT)
-        print("dequeue" + encoded_msg)
+        print('finish dequeue')
         return Message.decode(encoded_msg)
