@@ -32,28 +32,32 @@ class SelectiveRepeatProtocol():
                     with self.not_acknowledged_lock:
                         if self.not_acknowledged > 0:
                             self.not_acknowledged -= 1
-                            print(f"not_acknowledged DECREMENTED: {self.not_acknowledged}")
+                            print(f"not_acknowledged: {self.not_acknowledged}")
                     self.log_received_msg(msg_received, LOCAL_PORT)
                     if msg_received.ack_number == self.send_base:
                         self.move_send_window()
                     else:
                         logging.debug(
                             f"Received messy ACK: {msg_received.ack_number}")
-                # TODO q pasa si recivo otro msg q no es ack?
+                # TODO q pasa si recibo otro msg q no es ack?
             except Exception:  # TODO
-                pass
+                print("Error receiving acks")
 
     def receive_from_socket(self):  # TODO: pasar a otro archivo
         encoded_message, _ = self.socket.recvfrom(BUFFER_SIZE)
         return encoded_message
 
     def receive(self, decoded_msg, port, file_controller):
+        print(f"not ack: {self.not_acknowledged}")
+        print(f"base: {self.rcv_base}")
+        print(f"seq n: {decoded_msg.seq_number}")
         if decoded_msg.seq_number == self.rcv_base:  # it is the expected sqn
             file_controller.write_file(decoded_msg.data)
             self.log_received_msg(decoded_msg, port)
-            self.process_buffer()
+            self.process_buffer(file_controller)
         elif self.packet_is_within_window(decoded_msg):
             # it is not the expected sqn order but it is within the window
+            print("Buffering...")
             self.buffer.append(decoded_msg)
         # otherwise it is not within the window and it is discarded
         # TODO in this case handle timeout in the client
@@ -71,7 +75,7 @@ class SelectiveRepeatProtocol():
                 next_base += 1
             else:
                 break
-
+        print(f"Next base: {next_base}")
         self.move_rcv_window(next_base - self.rcv_base)
 
     def packet_is_within_window(self, decoded_msg):
@@ -99,6 +103,7 @@ class SelectiveRepeatProtocol():
         file_size = f_controller.get_file_size()
         # FIXME no se si esta bien asi:
         self.set_window_size(int(file_size/BUFFER_SIZE))
+        print("max sqnnn: ", self.max_sqn)
         data = f_controller.read()
         ack_thread = threading.Thread(target=self.receive_acks)
 
@@ -120,10 +125,14 @@ class SelectiveRepeatProtocol():
         ack_thread.join()
 
     def move_rcv_window(self, shift):
+        print(f"max sqn {self.max_sqn}")
+        print(f"w size {self.window_size}")
         if self.rcv_base + self.window_size-1 != self.max_sqn:
+            print(f"Moving rcv window {shift} positions")
             self.rcv_base += shift
 
     def move_send_window(self):
+        print(f"Moving send window: {self.max_sqn}")
         if self.send_base + self.window_size-1 != self.max_sqn:
             self.send_base += 1
 
