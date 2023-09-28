@@ -2,7 +2,7 @@ import logging
 from socket import socket, AF_INET, SOCK_DGRAM
 from lib.exceptions import ServerConnectionError
 from lib.flags import HI_ACK
-from lib.constants import BUFFER_SIZE
+from lib.constants import BUFFER_SIZE, TIMEOUT
 from lib.utils import select_protocol
 from lib.message import Message
 
@@ -16,7 +16,7 @@ class Client:
     # handshake
     def start(self, command, action):
         self.socket = socket(AF_INET, SOCK_DGRAM)
-        # self.socket.settimeout(3)
+        self.socket.settimeout(TIMEOUT)
         self.protocol = self.protocol(self.socket)
 
         self.send_hi_ack_to_server(command, self.protocol)
@@ -24,6 +24,9 @@ class Client:
         try:
             enconded_message, _ = self.socket.recvfrom(BUFFER_SIZE)
             maybe_hi_ack = Message.decode(enconded_message)
+        except socket.timeout:
+            logging.error("Timeout waiting for server response")
+            raise ServerConnectionError
         except Exception as e:
             logging.error(f"Server is offline: {e}")
             raise ServerConnectionError

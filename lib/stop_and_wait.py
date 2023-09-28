@@ -1,4 +1,5 @@
 import logging
+import socket
 from lib.commands import Command
 from lib.file_controller import FileController
 from lib.flags import NO_FLAGS
@@ -21,20 +22,14 @@ class StopAndWaitProtocol():
         print(
             f"decoded_msg.seq_number: {decoded_msg.seq_number} " +
             f"and self.ack_num: {self.ack_num}")
-        if decoded_msg.seq_number > self.ack_num - 1:
-            # it is not the expected sqn
-            print("Not expected sqn")
+
+        if self.ack_num > decoded_msg.seq_number + 1:
             log_received_msg(decoded_msg, port)
-            send_ack(decoded_msg.command, port, self.ack_num, self.socket)
+            send_ack(decoded_msg.command, port, decoded_msg.seq_number + 1,
+                     self.socket)
         else:
             file_controller.write_file(decoded_msg.data)
             log_received_msg(decoded_msg, port)
-            # TEST
-            # if decoded_msg.seq_number == 4:
-            #     print(
-            #         f"{decoded_msg.seq_number}")
-            #     time.sleep(6)
-            # TEST
             send_ack(decoded_msg.command, port, self.ack_num, self.socket)
             self.ack_num += 1
 
@@ -67,15 +62,19 @@ class StopAndWaitProtocol():
         f_controller = FileController.from_args(args.src, args.name, READ_MODE)
         data = f_controller.read()
         file_size = f_controller.get_file_size()
+        print("EN el upload")
         while file_size > 0:
             data_length = len(data)
             try:
                 self.send(Command.UPLOAD, LOCAL_PORT, data, f_controller)
             except DuplicatedACKError:
                 continue
-            except TimeoutError:
+            except socket.timeout:
+                print("timeouteamos")
                 logging.error("Timeout! Retrying...")
                 continue
+            # except Exception as e:
+            #     print("ninguna de esas", e)
             data = f_controller.read()
             file_size -= data_length
         self.socket.sendto(Message.close_msg(Command.UPLOAD),

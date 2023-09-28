@@ -1,7 +1,7 @@
 import logging
 from threading import Thread, Lock
 from lib.commands import Command
-from concurrent.futures import ThreadPoolExecutor
+# from concurrent.futures import ThreadPoolExecutor
 from lib.constants import BUFFER_SIZE, LOCAL_HOST, TIMEOUT
 from lib.constants import LOCAL_PORT, READ_MODE, SELECTIVE_REPEAT
 from lib.constants import MAX_WINDOW_SIZE
@@ -12,6 +12,7 @@ from lib.message_utils import receive_encoded_from_socket, send_ack
 from lib.log import log_received_msg, log_sent_msg
 from lib.message import Message
 from queue import Queue, Empty
+
 
 class SelectiveRepeatProtocol():
     def __init__(self, socket):
@@ -25,11 +26,10 @@ class SelectiveRepeatProtocol():
         self.not_acknowledged = 0  # n° packets sent but not acknowledged yet
         self.not_acknowledged_lock = Lock()
         self.pending_acks = Lock()
-        self.acks_map = {} # fernando te deje solo un segundo
-        self.thread_pool = ThreadPoolExecutor(max_workers=MAX_WINDOW_SIZE)
-        self.a = 0 
+        self.acks_map = {}   # fernando te deje solo un segundo
+        
+        # self.thread_pool = ThreadPoolExecutor(max_workers=MAX_WINDOW_SIZE)
 
-    # Receives acks from server
     def receive_acks(self):
         while True:
             try:
@@ -37,9 +37,7 @@ class SelectiveRepeatProtocol():
                 msg_received = Message.decode(maybe_ack)
                 if msg_received.flags == ACK.encoded:
                     print(f"Received ACK: {msg_received.ack_number}")
-                    
-                    self.acks_map[msg_received.ack_number].put(msg_received.ack_number)
-
+                   self.acks_map[msg_received.ack_number].put(msg_received.ack_number)
                     with self.not_acknowledged_lock:
                         if self.not_acknowledged > 0:
                             self.not_acknowledged -= 1
@@ -54,14 +52,7 @@ class SelectiveRepeatProtocol():
                 print(e)
                 print("Error receiving acks")
 
-    def receive(self, decoded_msg, port, file_controller):
-        """
-        if(decoded_msg.seq_number == 3 and self.a == 0):
-            print("entra al if")
-            self.a  = 1
-            print("volviendo")
-            return
-        """        
+    def receive(self, decoded_msg, port, file_controller):     
         if decoded_msg.seq_number == self.rcv_base:  # it is the expected sqn
             file_controller.write_file(decoded_msg.data)
             log_received_msg(decoded_msg, port)

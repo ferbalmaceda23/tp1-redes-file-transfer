@@ -5,7 +5,7 @@ from lib.file_controller import FileController
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
 from queue import Queue
-from lib.constants import READ_MODE, TIMEOUT, BUFFER_SIZE
+from lib.constants import READ_MODE, BUFFER_SIZE
 from lib.constants import WRITE_MODE, DEFAULT_FOLDER, ERROR_EXISTING_FILE
 from lib.flags import HI, HI_ACK, CLOSE
 from lib.commands import Command
@@ -43,7 +43,10 @@ class Server:
                 client_msg_queue.put(encoded_message)
                 self.clients[client_port] = client_msg_queue
                 args = (encoded_message, client_address, client_msg_queue)
-                Thread(target=self.handle_client_message, args=args).start()
+                try:
+                    Thread(target=self.handle_client_message, args=args).start()
+                except Exception:
+                    logging.error("Error creating thread")
 
     def handle_client_message(self, encoded_msg, client_address, msg_queue):
         encoded_msg = msg_queue.get()
@@ -70,6 +73,7 @@ class Server:
             else:
                 self.close_client_connection(
                     decoded_msg.command, client_address)
+                # mandar mensaje que no se pudo conectar
         except Exception:
             del self.clients[client_port]
 
@@ -147,11 +151,15 @@ class Server:
         file_controller = FileController.from_file_name(file_name, WRITE_MODE)
 
         while msg.flags != CLOSE.encoded:
-            print("antes del close el msg es", msg)
             self.protocol.receive(msg, client_port, file_controller)
             msg = self.dequeue_encoded_msg(client_msg_queue)
             print("el msg es", msg)
 
     def dequeue_encoded_msg(self, client_msg_queue):
-        encoded_msg = client_msg_queue.get(block=True, timeout=TIMEOUT)
+        # Sacamos el timeout de la cola porque en el upload
+        # trababa y no funcionaba.
+        # Quiza haya que agregarlo para el download, hay que ponerle
+        # timeout en la Queue y manejar la excepcion que se levanta
+        # en un except
+        encoded_msg = client_msg_queue.get(block=True)
         return Message.decode(encoded_msg)
