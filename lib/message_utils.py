@@ -8,4 +8,3 @@ def receive_encoded_from_socket(socket):
 def send_ack(command, port, ack_number, socket):
     ack_msg = Message.ack_msg(command, ack_number)
     socket.sendto(ack_msg, (LOCAL_HOST, port))
-    print(f"Sending ACK: {ack_number}")

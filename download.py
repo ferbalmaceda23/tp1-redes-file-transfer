@@ -7,6 +7,7 @@ from lib.constants import LOCAL_PORT
 from lib.client import Client
 from lib.utils import parse_args_download
 from lib.flags import CLOSE, NO_FLAGS, ACK
+from lib.message_utils import send_ack
 import sys
 import logging
 
@@ -23,22 +24,15 @@ def download(client, args):
     while message.flags != CLOSE.encoded:
         if message.seq_number > ack_number - 1:
             logging.error("Not expected sqn")
-            send_ack(client.socket, Command.DOWNLOAD, ack_number - 1, LOCAL_PORT)
+            send_ack(Command.DOWNLOAD, LOCAL_PORT, ack_number - 1, client.socket)
         else:
             logging.info("Received message with sqn: %s", message.seq_number)
             file_controller.write_file(message.data)
-            send_ack(client.socket, Command.DOWNLOAD, ack_number, LOCAL_PORT)
+            send_ack(Command.DOWNLOAD, LOCAL_PORT, ack_number, client.socket)
             ack_number += 1
         encoded_messge, _ = client.receive()
         message = Message.decode(encoded_messge)
     logging.info("Finished download")
-
-
-def send_ack(socket, command, ack_number, port):
-    # ack_msg = Message.ack_msg(command, ack_number)
-    # ack_msg = Message.ack_msg(command, ack_number)
-    ack_msg = Message(command, ACK, 0, "", b"", 0, ack_number)
-    socket.sendto(ack_msg.encode(), (LOCAL_HOST, port))
 
 
 if __name__ == "__main__":
