@@ -107,8 +107,8 @@ class Message:
         return Message(command, HI_ACK, EMPTY_FILE, "", EMPTY_DATA).encode()
 
     @classmethod
-    def hi_msg(cls, command):
-        return Message(command, HI, EMPTY_FILE, "", EMPTY_DATA).encode()
+    def hi_msg(cls, command, protocol):
+        return Message(command, HI, len(protocol.name.encode()), "", protocol.name.encode()).encode()
 
     @classmethod
     def download_msg(cls, file_name):
