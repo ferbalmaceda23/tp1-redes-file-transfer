@@ -11,7 +11,7 @@ from lib.flags import ACK, NO_FLAGS
 from lib.message_utils import receive_encoded_from_socket, send_ack
 from lib.log import log_received_msg, log_sent_msg
 from lib.message import Message
-from queue import Queue
+from queue import Queue, Empty
 
 class SelectiveRepeatProtocol():
     def __init__(self, socket):
@@ -27,6 +27,7 @@ class SelectiveRepeatProtocol():
         self.pending_acks = Lock()
         self.acks_map = {} # fernando te deje solo un segundo
         self.thread_pool = ThreadPoolExecutor(max_workers=MAX_WINDOW_SIZE)
+        self.a = 0 
 
     # Receives acks from server
     def receive_acks(self):
@@ -54,15 +55,25 @@ class SelectiveRepeatProtocol():
                 print("Error receiving acks")
 
     def receive(self, decoded_msg, port, file_controller):
+        """
+        if(decoded_msg.seq_number == 3 and self.a == 0):
+            print("entra al if")
+            self.a  = 1
+            print("volviendo")
+            return
+        """        
         if decoded_msg.seq_number == self.rcv_base:  # it is the expected sqn
             file_controller.write_file(decoded_msg.data)
             log_received_msg(decoded_msg, port)
             self.process_buffer(file_controller)
         elif self.packet_is_within_window(decoded_msg):
+            print("recibiendo el mensaje", decoded_msg.seq_number)
             # it is not the expected sqn order but it is within the window
             self.buffer.append(decoded_msg)
         # otherwise it is not within the window and it is discarded
         # TODO in this case handle timeout in the client
+        
+        print(f"MANDATE SORETE: {decoded_msg.seq_number}")
         send_ack(decoded_msg.command, port, decoded_msg.seq_number, self.socket)
 
     def process_buffer(self, file_controller):
@@ -93,16 +104,21 @@ class SelectiveRepeatProtocol():
             ack_queue = Queue()
             self.acks_map[self.seq_num] = ack_queue
             # self.thread_pool.submit(self.wait_for_ack, self, self.seq_num, ack_queue, msg, port)
-            Thread(target=self.wait_for_ack, args=(self.seq_num, ack_queue, msg, port)).start()
+            a = (self.seq_num, ack_queue, msg.encode(), port)
+            wait_ack_thread = Thread(target=self.wait_for_ack, args=a)
+            wait_ack_thread.start()
 
             log_sent_msg(msg, self.seq_num)
             self.seq_num += 1
             with self.not_acknowledged_lock:
                 self.not_acknowledged += 1
             
+            wait_ack_thread.join()
         else:
             # logging.debug("Window is full, waiting for ACKs...")
             raise WindowFullError
+
+        
 
     def upload(self, args):
         f_controller = FileController.from_args(args.src, args.name, READ_MODE)
@@ -141,9 +157,10 @@ class SelectiveRepeatProtocol():
     def calculate_window_size(self, number_of_packets):
         return min(int(number_of_packets/2), MAX_WINDOW_SIZE)
     
-    def wait_for_ack(self, ack_number, ack_queue, msg, port):
+    def wait_for_ack(self, ack_number, ack_queue, encoded_msg, port):
         print(f"wating for ack {ack_number}")
         succesfully_acked = False
+        msg_dummy = Message.ack_msg(Command.UPLOAD, ack_number)
         while not succesfully_acked:
             try:
                 ack = ack_queue.get(block=True, timeout=TIMEOUT)
@@ -151,6 +168,18 @@ class SelectiveRepeatProtocol():
                 if ack == ack_number:
                     print(f"[THREAD for ACK {ack_number}] succesfully acked")
                     succesfully_acked = True
+                    del self.acks_map[ack_number]
+                    with self.not_acknowledged_lock:
+                        self.not_acknowledged -= 1
             except TimeoutError:
-                logging.error(f"Timeout for ACK {self.ack_number}")
-                self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
+                logging.error(f"Timeout for ACK {ack_number}")
+                logging.debug("sending msg back to server")
+                self.socket.sendto(msg_dummy, (LOCAL_HOST, port))
+                # logging.debug("no asumo nada", encoded_msg)
+                logging.debug("sent")
+            except Empty:
+                logging.error(f"Timeout for ACK {ack_number}")
+                logging.debug("sending msg back to server")
+                self.socket.sendto(msg_dummy, (LOCAL_HOST, port))
+                # logging.debug("no asumo nada", encoded_msg)
+                logging.debug("sent")

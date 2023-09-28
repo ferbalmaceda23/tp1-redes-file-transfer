@@ -145,9 +145,12 @@ class Server:
         file_controller = FileController.from_file_name(file_name, WRITE_MODE)
 
         while msg.flags != CLOSE.encoded:
+            print("antes del close el msg es", msg)
             self.protocol.receive(msg, client_port, file_controller)
             msg = self.dequeue_encoded_msg(client_msg_queue)
+            print("el msg es", msg)
 
     def dequeue_encoded_msg(self, client_msg_queue):
+        print("esperando aca")
         encoded_msg = client_msg_queue.get(block=True, timeout=TIMEOUT)
         return Message.decode(encoded_msg)
