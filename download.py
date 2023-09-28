@@ -5,15 +5,9 @@ from lib.message import Message
 from lib.log import prepare_logging
 from lib.constants import LOCAL_PORT
 from lib.client import Client
-<<<<<<< HEAD
 from lib.args_parser import parse_args_download
-from lib.utils import send_ack
-from lib.flags import CLOSE, NO_FLAGS
-=======
-from lib.utils import parse_args_download
-from lib.flags import CLOSE, NO_FLAGS, ACK
 from lib.message_utils import send_ack
->>>>>>> 312d1f4506ee21549b31e7d4bf5cf76596b315de
+from lib.flags import CLOSE, NO_FLAGS
 import sys
 import logging
 

@@ -1,5 +1,5 @@
 -- Crea un nuevo protocolo en Wireshark para tu protocolo personalizado
-local p_fiubardt = Proto("fiubardt", RDT GA6)
+local p_fiubardt = Proto("fiubardt", "RDT GA6")
 
 -- Define los campos de tu protocolo personalizado
 local command = ProtoField.uint8("fiubardt.command", "Command")
@@ -27,7 +27,7 @@ function p_fiubardt.dissector(buf, pinfo, tree)
     subtree:add(data, buf(414))
 
     -- Establece el nombre del protocolo en la columna de Wireshark
-    pinfo.cols.protocol:set(RDT GA6)
+    pinfo.cols.protocol:set("RDT GA6")
 end
 
 -- Registra el protocolo y el desmenuzador
