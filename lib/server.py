@@ -153,6 +153,5 @@ class Server:
             print("el msg es", msg)
 
     def dequeue_encoded_msg(self, client_msg_queue):
-        print("esperando aca")
         encoded_msg = client_msg_queue.get(block=True, timeout=TIMEOUT)
         return Message.decode(encoded_msg)

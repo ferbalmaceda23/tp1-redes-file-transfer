@@ -1,7 +1,7 @@
 import logging
 from lib.commands import Command
 from lib.file_controller import FileController
-from lib.flags import ACK, NO_FLAGS
+from lib.flags import NO_FLAGS
 from lib.constants import LOCAL_HOST, LOCAL_PORT
 from lib.constants import READ_MODE, STOP_AND_WAIT
 from lib.message import Message
