@@ -20,12 +20,12 @@ class StopAndWaitProtocol():
     def receive(self, decoded_msg, port, file_controller):
         print(
             f"decoded_msg.seq_number: {decoded_msg.seq_number} " +
-            "and self.ack_num: {self.ack_num}")
+            f"and self.ack_num: {self.ack_num}")
         if decoded_msg.seq_number > self.ack_num - 1:
             # it is not the expected sqn
             print("Not expected sqn")
             log_received_msg(decoded_msg, port)
-            send_ack(decoded_msg.command, port, self.socket)
+            send_ack(decoded_msg.command, port, self.ack_num, self.socket)
         else:
             file_controller.write_file(decoded_msg.data)
             log_received_msg(decoded_msg, port)
@@ -35,7 +35,7 @@ class StopAndWaitProtocol():
             #         f"{decoded_msg.seq_number}")
             #     time.sleep(6)
             # TEST
-            send_ack(decoded_msg.command, port, self.socket)
+            send_ack(decoded_msg.command, port, self.ack_num, self.socket)
             self.ack_num += 1
 
     def send_error(self, command, port, error_msg):

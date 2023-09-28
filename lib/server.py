@@ -18,7 +18,7 @@ class Server:
         self.ip = ip
         self.port = port
         self.clients = {}
-        self.protocol = select_protocol(args.RDTprotocol)
+        self.protocol = None
         storage = args.storage
         self.storage = storage if storage is not None else DEFAULT_FOLDER
 
@@ -28,7 +28,6 @@ class Server:
     def start(self):
         self.socket = socket(AF_INET, SOCK_DGRAM)
         self.socket.bind((self.ip, self.port))
-        self.protocol = self.protocol(self.socket)
         logging.info(f"Server {self.ip} is running on port {self.port}")
         self.handle_socket_messages()
 
@@ -54,9 +53,12 @@ class Server:
 
     def three_way_handshake(self, client_address, msg_queue, decoded_msg):
         client_port = client_address[1]
+        protocol_RDT = decoded_msg.data.decode()
         logging.debug(
             f"Client {client_port}: wants to connect, sending confirmation, " +
-            f"message type: {decoded_msg.command}")
+            f"message type: {decoded_msg.command}. Protocol: {protocol_RDT}")
+        self.protocol = select_protocol(protocol_RDT)
+        self.protocol = self.protocol(self.socket)
         self.send_HI_ACK(client_address, decoded_msg)
         try:
             encoded_message = msg_queue.get(block=True, timeout=300)
