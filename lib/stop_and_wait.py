@@ -20,7 +20,7 @@ class StopAndWaitProtocol():
     def receive(self, decoded_msg, port, file_controller):
         print(
             f"decoded_msg.seq_number: {decoded_msg.seq_number} " +
-            "and self.ack_num: {self.ack_num}")
+            f"and self.ack_num: {self.ack_num}")
         if decoded_msg.seq_number > self.ack_num - 1:
             # it is not the expected sqn
             print("Not expected sqn")

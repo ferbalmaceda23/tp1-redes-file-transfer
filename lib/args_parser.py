@@ -17,6 +17,14 @@ def parse_args_upload():
         type=str
     )
 
+    parser.add_argument(
+        "-pr",
+        "--RDTprotocol",
+        help="stop_and_wait (sw) or selective_repeat (sr)",
+        action="store",
+        type=str
+    )
+
     return validate_args_upload(parser)
 
 
@@ -53,6 +61,14 @@ def parse_args_download():
         help="destination file path",
         action="store",
         required=True,
+        type=str
+    )
+
+    parser.add_argument(
+        "-pr",
+        "--RDTprotocol",
+        help="stop_and_wait (sw) or selective_repeat (sr)",
+        action="store",
         type=str
     )
 
@@ -96,14 +112,6 @@ def add_args(parser):
         "-n",
         "--name",
         help="file name",
-        action="store",
-        type=str
-    )
-
-    parser.add_argument(
-        "-pr",
-        "--RDTprotocol",
-        help="stop_and_wait (sw) or selective_repeat (sr)",
         action="store",
         type=str
     )
@@ -156,7 +164,5 @@ def validate_args_server(parser):
         args.host = "localhost"
     if args.port is None:
         args.port = 8080
-    if args.RDTprotocol is None:
-        args.RDTprotocol = STOP_AND_WAIT
 
     return args

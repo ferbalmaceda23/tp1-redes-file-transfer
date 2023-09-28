@@ -19,7 +19,7 @@ class Client:
         # self.socket.settimeout(3)
         self.protocol = self.protocol(self.socket)
 
-        self.send_hi_ack_to_server(command)
+        self.send_hi_ack_to_server(command, self.protocol)
 
         try:
             enconded_message, _ = self.socket.recvfrom(BUFFER_SIZE)
@@ -34,8 +34,8 @@ class Client:
 
         action()
 
-    def send_hi_ack_to_server(self, command):
-        hi_msg = Message.hi_msg(command)
+    def send_hi_ack_to_server(self, command, protocol):
+        hi_msg = Message.hi_msg(command, protocol)
         self.send(hi_msg)
         logging.info("Sent HI to server")
 
