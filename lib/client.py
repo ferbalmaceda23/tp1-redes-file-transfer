@@ -1,8 +1,9 @@
 import logging
 from socket import socket, AF_INET, SOCK_DGRAM
+from lib.commands import Command
 from lib.exceptions import ServerConnectionError
 from lib.flags import HI_ACK
-from lib.constants import BUFFER_SIZE, TIMEOUT
+from lib.constants import BUFFER_SIZE, TIMEOUT, MAX_TIMEOUT_RETRIES
 from lib.utils import select_protocol
 from lib.message import Message
 
@@ -16,24 +17,31 @@ class Client:
     # handshake
     def start(self, command, action):
         self.socket = socket(AF_INET, SOCK_DGRAM)
-        self.socket.settimeout(TIMEOUT)
+        if command == Command.UPLOAD:
+            self.socket.settimeout(TIMEOUT)
         self.protocol = self.protocol(self.socket)
 
-        self.send_hi_ack_to_server(command, self.protocol)
+        hi_tries = 0
+        while hi_tries < MAX_TIMEOUT_RETRIES:
+            try:
+                self.send_hi_ack_to_server(command, self.protocol)
+                enconded_message, _ = self.socket.recvfrom(BUFFER_SIZE)
+                maybe_hi_ack = Message.decode(enconded_message)
+                break
+            except socket.timeout:
+                logging.error("Timeout waiting for HI server response. Retrying...")
+                hi_tries += 1
+            except Exception as e:
+                logging.error(f"Server is offline: {e}")
+                raise ServerConnectionError
 
-        try:
-            enconded_message, _ = self.socket.recvfrom(BUFFER_SIZE)
-            maybe_hi_ack = Message.decode(enconded_message)
-        except socket.timeout:
-            logging.error("Timeout waiting for server response")
-            raise ServerConnectionError
-        except Exception as e:
-            logging.error(f"Server is offline: {e}")
+        if hi_tries == MAX_TIMEOUT_RETRIES:
+            logging.error("HI response T.O, max retries reached")
             raise ServerConnectionError
 
         if maybe_hi_ack.flags == HI_ACK.encoded:
             self.send(Message.hi_ack_msg(command))
-            logging.info("Server is online")
+            logging.info("Connected to server")
 
         action()
 
@@ -47,8 +55,3 @@ class Client:
 
     def receive(self):
         return self.socket.recvfrom(BUFFER_SIZE)
-
-# if __name__ == "__main__":
-#     client = Client("0.0.0.0", 8080)
-#     client.connect()
-#     client.start()

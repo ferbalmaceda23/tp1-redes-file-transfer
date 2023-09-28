@@ -18,19 +18,19 @@ def download(client, args):
     msg_to_send = Message(Command.DOWNLOAD, NO_FLAGS, 0, args.name, b"")
     # msg_to_send = Message.download_msg(args.name)
     client.send(msg_to_send.encode())
-    ack_number = 1
-
+    # ack_number = 1
     encoded_messge, _ = client.receive()
     message = Message.decode(encoded_messge)
     while message.flags != CLOSE.encoded:
-        if message.seq_number > ack_number - 1:
-            logging.error("Not expected sqn")
-            send_ack(Command.DOWNLOAD, LOCAL_PORT, ack_number - 1, client.socket)
-        else:
-            logging.info("Received message with sqn: %s", message.seq_number)
-            file_controller.write_file(message.data)
-            send_ack(Command.DOWNLOAD, LOCAL_PORT, ack_number, client.socket)
-            ack_number += 1
+        # if message.seq_number  ack_number - 1:
+        #     logging.error("Not expected sqn")
+        #     send_ack(Command.DOWNLOAD, LOCAL_PORT, ack_number - 1, client.socket)
+        # else:
+        #     logging.info("Received message with sqn: %s", message.seq_number)
+        #     file_controller.write_file(message.data)
+        #     send_ack(Command.DOWNLOAD, LOCAL_PORT, ack_number, client.socket)
+        #     ack_number += 1
+        client.protocol.receive(message, LOCAL_PORT, file_controller)
         encoded_messge, _ = client.receive()
         message = Message.decode(encoded_messge)
     logging.info("Finished download")

@@ -1,11 +1,11 @@
 import logging
 import os
+from queue import Queue, Empty
 from lib.exceptions import DuplicatedACKError
 from lib.file_controller import FileController
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
-from queue import Queue
-from lib.constants import READ_MODE, BUFFER_SIZE
+from lib.constants import READ_MODE, BUFFER_SIZE, TIMEOUT
 from lib.constants import WRITE_MODE, DEFAULT_FOLDER, ERROR_EXISTING_FILE
 from lib.flags import HI, HI_ACK, CLOSE
 from lib.commands import Command
@@ -29,7 +29,11 @@ class Server:
         self.socket = socket(AF_INET, SOCK_DGRAM)
         self.socket.bind((self.ip, self.port))
         logging.info(f"Server {self.ip} is running on port {self.port}")
-        self.handle_socket_messages()
+        try:
+            self.handle_socket_messages()
+        except Exception as e:
+            logging.error(f"Error in server: {e}")
+            raise e
 
     def handle_socket_messages(self):
         while True:
@@ -45,21 +49,27 @@ class Server:
                 args = (encoded_message, client_address, client_msg_queue)
                 try:
                     Thread(target=self.handle_client_message, args=args).start()
-                except Exception:
-                    logging.error("Error creating thread")
+                except Exception as e:
+                    logging.error(f"Error in thread {e}")
+
 
     def handle_client_message(self, encoded_msg, client_address, msg_queue):
-        encoded_msg = msg_queue.get()
-        decoded_msg = Message.decode(encoded_msg)
-        if decoded_msg.flags == HI.encoded:
-            self.three_way_handshake(client_address, msg_queue, decoded_msg)
+        try:
+            encoded_msg = msg_queue.get(block=True, timeout=TIMEOUT)
+            decoded_msg = Message.decode(encoded_msg)
+            if decoded_msg.flags == HI.encoded:
+                self.three_way_handshake(client_address, msg_queue, decoded_msg)
+        except Exception as e: # possible Empty exception
+            logging.error(f"Error handling client message: {e}")
+            raise e
 
     def three_way_handshake(self, client_address, msg_queue, decoded_msg):
         client_port = client_address[1]
         protocol_RDT = decoded_msg.data.decode()
         logging.debug(
-            f"Client {client_port}: wants to connect, sending confirmation, " +
-            f"message type: {decoded_msg.command}. Protocol: {protocol_RDT}")
+            f"Client {client_port}: wants to connect, sending confirmation, "
+            + f"message type: {decoded_msg.command}. Protocol: {protocol_RDT}"
+        )
         self.protocol = select_protocol(protocol_RDT)
         self.protocol = self.protocol(self.socket)
         self.send_HI_ACK(client_address, decoded_msg)
@@ -69,12 +79,13 @@ class Server:
 
             if decoded_msg.flags == HI_ACK.encoded:
                 self.init_file_transfer_operation(
-                    msg_queue, decoded_msg, client_address)
+                    msg_queue, decoded_msg, client_address
+                )
             else:
-                self.close_client_connection(
-                    decoded_msg.command, client_address)
+                self.close_client_connection(decoded_msg.command, client_address)
                 # mandar mensaje que no se pudo conectar
         except Exception:
+            logging.error(f"Client {client_port}: Timeout or unknown message. HI_ACK expected")
             del self.clients[client_port]
 
     def close_client_connection(self, command, client_address):
@@ -84,14 +95,13 @@ class Server:
         logging.info(f"Client {client_port}: Timeout or unknown message")
 
     def init_file_transfer_operation(
-        self,
-        client_msg_queue,
-        decoded_msg,
-        client_address
+        self, client_msg_queue, decoded_msg, client_address
     ):
         client_port = client_address[1]
-        logging.info(f"Client {client_port}: is online, message type: " +
-                     f"{decoded_msg.command}")
+        logging.info(
+            f"Client {client_port}: is online, message type: "
+            + f"{decoded_msg.command}"
+        )
         self.clients[client_port] = client_msg_queue
         if decoded_msg.command == Command.DOWNLOAD:
             self.handle_download(client_address, client_msg_queue)
@@ -99,8 +109,8 @@ class Server:
             self.handle_upload(client_port, client_msg_queue)
         else:
             logging.info(
-                f"Client {client_port}: unknown command " +
-                "closing connection")
+                f"Client {client_port}: unknown command " + "closing connection"
+            )
             self.close_client_connection(decoded_msg.command, client_port)
 
     def send_HI_ACK(self, client_address, decoded_msg):
@@ -130,12 +140,17 @@ class Server:
             # file_size -= len(data)
             data_length = len(data)
             try:
-                self.protocol.send(Command.DOWNLOAD, client_port, data,
-                                   file_controller,
-                                   lambda: self.dequeue_encoded_msg(msg_queue))
+                self.protocol.send(
+                    Command.DOWNLOAD,
+                    client_port,
+                    data,
+                    file_controller,
+                    lambda: self.dequeue_encoded_msg_download(msg_queue),
+                )
             except DuplicatedACKError:
+                logging.error("Duplicated ACK! Retrying...")
                 continue
-            except TimeoutError:
+            except Empty:
                 logging.error("Timeout! Retrying...")
                 print("Timeout!")
                 continue
@@ -162,4 +177,9 @@ class Server:
         # timeout en la Queue y manejar la excepcion que se levanta
         # en un except
         encoded_msg = client_msg_queue.get(block=True)
+        return Message.decode(encoded_msg)
+
+    def dequeue_encoded_msg_download(self, client_msg_queue):
+        encoded_msg = client_msg_queue.get(block=True, timeout=TIMEOUT)
+
         return Message.decode(encoded_msg)

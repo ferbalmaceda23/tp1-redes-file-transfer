@@ -4,7 +4,6 @@ from lib.commands import Command
 from lib.constants import BUFFER_SIZE, EMPTY_DATA, EMPTY_FILE
 
 
-
 def add_padding(data: bytes, n: int):
     k = n - len(data)
     if k < 0:
@@ -23,6 +22,8 @@ data: [bytes]
 ack_number: [int]
 seq_number: [int]
 """
+
+
 class Message:
     def __init__(self, command: Command, flags: Flag, data_length: int,
                  file_name: str, data: bytes, seq_number=0, ack_number=0):

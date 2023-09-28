@@ -28,7 +28,6 @@ def prepare_logging(args):
             return logging.ERROR
         else:
             return logging.INFO
-
     
     logging.basicConfig(level=level_verbosity(), handlers=[stdout_handler])
     error_stdout_handler = logging.StreamHandler()
@@ -41,15 +40,15 @@ def prepare_logging(args):
     debug_stdout_handler.setFormatter(debug_formatter)
 
     logger = logging.getLogger('SERVER')
-    logger.addHandler(error_stdout_handler) 
-    logger.addHandler(info_stdout_handler)  
-    logger.addHandler(debug_stdout_handler) 
+    logger.addHandler(error_stdout_handler)
+    logger.addHandler(info_stdout_handler) 
+    logger.addHandler(debug_stdout_handler)
 
 
 def log_received_msg(msg, port):  
-        logging.info(
-            f"Client {port}: received {len(msg.data)}" +
-            f" bytes, seq_number: {msg.seq_number}")
+    logging.info(
+        f"Client {port}: received {len(msg.data)}" +
+        f" bytes, seq_number: {msg.seq_number}")
 
 def log_sent_msg(msg, seq_num):
     logging.debug(

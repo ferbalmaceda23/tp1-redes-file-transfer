@@ -37,7 +37,7 @@ class SelectiveRepeatProtocol():
                 msg_received = Message.decode(maybe_ack)
                 if msg_received.flags == ACK.encoded:
                     print(f"Received ACK: {msg_received.ack_number}")
-                   self.acks_map[msg_received.ack_number].put(msg_received.ack_number)
+                    self.acks_map[msg_received.ack_number].put(msg_received.ack_number)
                     with self.not_acknowledged_lock:
                         if self.not_acknowledged > 0:
                             self.not_acknowledged -= 1
@@ -47,7 +47,6 @@ class SelectiveRepeatProtocol():
                     else:
                         logging.debug(
                             f"Received messy ACK: {msg_received.ack_number}")
-                # TODO q pasa si recibo otro msg q no es ack?
             except Exception as e:  # TODO
                 print(e)
                 print("Error receiving acks")
@@ -95,15 +94,14 @@ class SelectiveRepeatProtocol():
             ack_queue = Queue()
             self.acks_map[self.seq_num] = ack_queue
             # self.thread_pool.submit(self.wait_for_ack, self, self.seq_num, ack_queue, msg, port)
-            a = (self.seq_num, ack_queue, msg.encode(), port)
-            wait_ack_thread = Thread(target=self.wait_for_ack, args=a)
+            args = (self.seq_num, ack_queue, msg.encode(), port)
+            wait_ack_thread = Thread(target=self.wait_for_ack, args=args)
             wait_ack_thread.start()
 
             log_sent_msg(msg, self.seq_num)
             self.seq_num += 1
             with self.not_acknowledged_lock:
-                self.not_acknowledged += 1
-            
+                self.not_acknowledged += 1            
             wait_ack_thread.join()
         else:
             # logging.debug("Window is full, waiting for ACKs...")

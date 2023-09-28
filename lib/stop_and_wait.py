@@ -23,6 +23,16 @@ class StopAndWaitProtocol():
             f"decoded_msg.seq_number: {decoded_msg.seq_number} " +
             f"and self.ack_num: {self.ack_num}")
 
+        # dos escenarios: 
+        # 1) El cliente manda el upload y no llega
+        # En este caso el server se queda esperando (Le sacamos el timeout) y al cliente
+        # se le timeoutea el socket. Entonces vuelve a mandar con el mismo seq number y aca no paso nada
+        # 2) El cliente manda upload, el server manda ACK y se pierde
+        # En este caso nosotros aumentamos nuestro ACK pero como nunca llega al cliente el seq_number se mantiene
+        # Por eso nos llega un seq_number dos veces menor que nuestro ACK, en ese caso devolvemos el seq_number + 1 y no hacemos nada pq
+        # ya tenemos ese paquete
+        # Si llega un seq que es solamente 1 numero mayor ejecutamos normal
+        # Nunca va a llegar un seq mayor al ack por el escenario 1)
         if self.ack_num > decoded_msg.seq_number + 1:
             log_received_msg(decoded_msg, port)
             send_ack(decoded_msg.command, port, decoded_msg.seq_number + 1,
@@ -54,9 +64,9 @@ class StopAndWaitProtocol():
                 raise DuplicatedACKError
             else:
                 self.seq_num += 1
-        except TimeoutError:
+        except socket.timeout:
             logging.error("Timeout sending message")
-            raise TimeoutError
+            raise socket.timeout
 
     def upload(self, args):
         f_controller = FileController.from_args(args.src, args.name, READ_MODE)
@@ -70,7 +80,6 @@ class StopAndWaitProtocol():
             except DuplicatedACKError:
                 continue
             except socket.timeout:
-                print("timeouteamos")
                 logging.error("Timeout! Retrying...")
                 continue
             # except Exception as e:
