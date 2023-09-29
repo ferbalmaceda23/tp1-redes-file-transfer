@@ -1,4 +1,5 @@
 import logging
+import socket
 from lib.log import prepare_logging
 from lib.message import Command
 from lib.client import Client
@@ -22,4 +23,3 @@ if __name__ == "__main__":
     except Exception as e:
         logging.error(f"An error occurred: {e}")
         sys.exit(1)
-

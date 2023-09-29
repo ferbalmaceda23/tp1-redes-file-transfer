@@ -3,10 +3,10 @@ import socket
 from lib.commands import Command
 from lib.file_controller import FileController
 from lib.flags import NO_FLAGS
-from lib.constants import LOCAL_HOST, LOCAL_PORT
+from lib.constants import LOCAL_HOST, LOCAL_PORT, MAX_TIMEOUT_RETRIES
 from lib.constants import READ_MODE, STOP_AND_WAIT
 from lib.message import Message
-from lib.exceptions import DuplicatedACKError
+from lib.exceptions import DuplicatedACKError, TimeoutsRetriesExceeded
 from lib.message_utils import receive_encoded_from_socket, send_ack
 from lib.log import log_received_msg, log_sent_msg
 
@@ -16,6 +16,7 @@ class StopAndWaitProtocol():
         self.socket = socket
         self.seq_num = 0
         self.ack_num = 1
+        self.tries_send = 0
         self.name = STOP_AND_WAIT
 
     def receive(self, decoded_msg, port, file_controller):
@@ -23,7 +24,7 @@ class StopAndWaitProtocol():
             f"decoded_msg.seq_number: {decoded_msg.seq_number} " +
             f"and self.ack_num: {self.ack_num}")
 
-        # dos escenarios: 
+        # dos escenarios:
         # 1) El cliente manda el upload y no llega
         # En este caso el server se queda esperando (Le sacamos el timeout) y al cliente
         # se le timeoutea el socket. Entonces vuelve a mandar con el mismo seq number y aca no paso nada
@@ -49,6 +50,12 @@ class StopAndWaitProtocol():
         log_sent_msg(msg, self.seq_num)
 
     def send(self, command, port, data, file_controller, receive=None):
+        if (self.tries_send >= MAX_TIMEOUT_RETRIES):
+            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+            print(self.tries_send)
+            logging.error("Max timeout retries reached")
+            raise TimeoutsRetriesExceeded
+        self.tries_send +=1
         msg = Message(command, NO_FLAGS, len(data),
                       file_controller.file_name, data, self.seq_num, 0)
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
@@ -63,6 +70,7 @@ class StopAndWaitProtocol():
                 logging.info(f"Client {port}: received duplicated ACK")
                 raise DuplicatedACKError
             else:
+                self.tries_send = 0
                 self.seq_num += 1
         except socket.timeout:
             logging.error("Timeout sending message")
