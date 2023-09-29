@@ -1,5 +1,5 @@
 import os
-from lib.constants import SELECTIVE_REPEAT, BUFFER_SIZE, LOCAL_HOST
+from lib.constants import SELECTIVE_REPEAT
 from lib.selective_repeat import SelectiveRepeatProtocol
 from lib.stop_and_wait import StopAndWaitProtocol
 

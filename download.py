@@ -1,5 +1,5 @@
 from lib.commands import Command
-from lib.constants import BUFFER_SIZE, STOP_AND_WAIT, WRITE_MODE
+from lib.constants import BUFFER_SIZE, SELECTIVE_REPEAT, STOP_AND_WAIT, WRITE_MODE
 from lib.file_controller import FileController
 from lib.message import Message
 from lib.log import prepare_logging
@@ -16,8 +16,11 @@ import time
 def download(client, args):
     if args.RDTprotocol == STOP_AND_WAIT:
         download_sw(client, args)
-    else:
+    elif args.RDTprotocol == SELECTIVE_REPEAT:
         download_sr(client, args)
+    else:
+        logging.error("Invalid RDT protocol")
+        sys.exit(1)
 
 def download_sr(client, args):
     file_controller = FileController.from_file_name(args.dst, WRITE_MODE)

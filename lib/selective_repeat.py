@@ -201,3 +201,8 @@ class SelectiveRepeatProtocol():
                 self.socket.sendto(msg_dummy, (LOCAL_HOST, port))
                 # logging.debug("no asumo nada", encoded_msg)
                 logging.debug("sent")
+    
+    def send_error(self, command, port, error_msg):
+        encoded_msg = Message.error_msg(command, error_msg)
+        self.socket.sendto(encoded_msg, (LOCAL_HOST, port))
+        log_sent_msg(Message.decode(encoded_msg), self.seq_num)

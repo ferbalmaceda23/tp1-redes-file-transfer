@@ -72,6 +72,7 @@ class Server:
                 self.close_client_connection(
                     decoded_msg.command, client_address)
         except Exception as e:
+            raise e
             logging.error(f"Client {client_port}: {e}")
             logging.info(f"Client {client_port}: handshake timeout."+
                          " Closing connection.")
