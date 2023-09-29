@@ -1,5 +1,5 @@
 from lib.commands import Command
-from lib.constants import WRITE_MODE
+from lib.constants import BUFFER_SIZE, SELECTIVE_REPEAT, STOP_AND_WAIT, WRITE_MODE
 from lib.file_controller import FileController
 from lib.message import Message
 from lib.log import prepare_logging
@@ -10,10 +10,35 @@ from lib.message_utils import send_ack
 from lib.flags import CLOSE, NO_FLAGS
 import sys
 import logging
-
+import time
 
 # TODO: pasar esto a stop and wait
 def download(client, args):
+    if args.RDTprotocol == STOP_AND_WAIT:
+        download_sw(client, args)
+    elif args.RDTprotocol == SELECTIVE_REPEAT:
+        download_sr(client, args)
+    else:
+        logging.error("Invalid RDT protocol")
+        sys.exit(1)
+
+def download_sr(client, args):
+    file_controller = FileController.from_file_name(args.dst, WRITE_MODE)
+    msg_to_send = Message(Command.DOWNLOAD, NO_FLAGS, 0, args.name, b"")
+    client.send(msg_to_send.encode())
+
+    encoded_msg = client.socket.recvfrom(BUFFER_SIZE)[0]
+    msg = Message.decode(encoded_msg)
+    
+    logging.info(f"Downloading file : {args.name}")
+
+    while msg.flags != CLOSE.encoded:
+        client.protocol.receive(msg, args.port, file_controller)
+        encoded_msg = client.socket.recvfrom(BUFFER_SIZE)[0]
+        msg = Message.decode(encoded_msg)
+
+################### STOP AND WAIT ###################
+def download_sw(client, args):
     file_controller = FileController.from_args(args.dst, args.name, WRITE_MODE)
     msg_to_send = Message(Command.DOWNLOAD, NO_FLAGS, 0, args.name, b"")
     # msg_to_send = Message.download_msg(args.name)

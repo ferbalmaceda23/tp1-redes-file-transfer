@@ -10,6 +10,7 @@ from lib.constants import WRITE_MODE, DEFAULT_FOLDER, ERROR_EXISTING_FILE
 from lib.flags import HI, HI_ACK, CLOSE
 from lib.commands import Command
 from lib.message import Message
+from lib.selective_repeat import SelectiveRepeatProtocol
 from lib.utils import get_file_name, select_protocol
 
 
@@ -74,7 +75,7 @@ class Server:
         self.protocol = self.protocol(self.socket)
         self.send_HI_ACK(client_address, decoded_msg)
         try:
-            encoded_message = msg_queue.get(block=True, timeout=300)
+            encoded_message = msg_queue.get(block=True)
             decoded_msg = Message.decode(encoded_message)
 
             if decoded_msg.flags == HI_ACK.encoded:
@@ -82,10 +83,13 @@ class Server:
                     msg_queue, decoded_msg, client_address
                 )
             else:
-                self.close_client_connection(decoded_msg.command, client_address)
-                # mandar mensaje que no se pudo conectar
-        except Exception:
-            logging.error(f"Client {client_port}: Timeout or unknown message. HI_ACK expected")
+                self.close_client_connection(
+                    decoded_msg.command, client_address)
+        except Exception as e:
+            raise e
+            logging.error(f"Client {client_port}: {e}")
+            logging.info(f"Client {client_port}: handshake timeout."+
+                         " Closing connection.")
             del self.clients[client_port]
 
     def close_client_connection(self, command, client_address):
@@ -134,30 +138,33 @@ class Server:
         data = file_controller.read()
         file_size = file_controller.get_file_size()
 
-        while file_size > 0:
-            # data = file_controller.read()
-            # self.protocol.send(command, client_port, data, file_controller)
-            # file_size -= len(data)
-            data_length = len(data)
-            try:
-                self.protocol.send(
-                    Command.DOWNLOAD,
-                    client_port,
-                    data,
-                    file_controller,
-                    lambda: self.dequeue_encoded_msg_download(msg_queue),
-                )
-            except DuplicatedACKError:
-                logging.error("Duplicated ACK! Retrying...")
-                continue
-            except Empty:
-                logging.error("Timeout! Retrying...")
-                print("Timeout!")
-                continue
-            data = file_controller.read()
-            file_size -= data_length
+        if type(self.protocol)  == SelectiveRepeatProtocol:
+            print("SELECTIVE REPEAT DESDE EL SERVIDOR")
+            Thread(target=self.protocol.receive_acks_from_queue, args=(msg_queue,)).start()
+            while file_size > 0:
+                self.protocol.send(command, client_port, data, file_controller)
+                file_size -= len(data)
+                data = file_controller.read()
+        else:
+            while file_size > 0:
+                # data = file_controller.read()
+                # self.protocol.send(command, client_port, data, file_controller)
+                # file_size -= len(data)
+                data_length = len(data)
+                try:
+                    self.protocol.send(Command.DOWNLOAD, client_port, data,
+                                    file_controller,
+                                    lambda: self.dequeue_encoded_msg(msg_queue))
+                except DuplicatedACKError:
+                    continue
+                except TimeoutError:
+                    logging.error("Timeout! Retrying...")
+                    print("Timeout!")
+                    continue
+                data = file_controller.read()
+                file_size -= data_length
 
-        self.send_CLOSE(command, client_address)
+            self.send_CLOSE(command, client_address)
 
     def handle_upload(self, client_port, client_msg_queue):
         msg = self.dequeue_encoded_msg(client_msg_queue)  # first upload msg
@@ -168,7 +175,6 @@ class Server:
         while msg.flags != CLOSE.encoded:
             self.protocol.receive(msg, client_port, file_controller)
             msg = self.dequeue_encoded_msg(client_msg_queue)
-            print("el msg es", msg)
 
     def dequeue_encoded_msg(self, client_msg_queue):
         # Sacamos el timeout de la cola porque en el upload

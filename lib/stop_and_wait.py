@@ -44,7 +44,7 @@ class StopAndWaitProtocol():
             self.ack_num += 1
 
     def send_error(self, command, port, error_msg):
-        msg = Message.msg_error(command, error_msg)
+        msg = Message.error_msg(command, error_msg)
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
         log_sent_msg(msg, self.seq_num)
 
