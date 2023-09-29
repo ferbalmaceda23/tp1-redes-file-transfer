@@ -67,7 +67,10 @@ class SelectiveRepeatProtocol():
                         if self.not_acknowledged > 0:
                             self.not_acknowledged -= 1
                     log_received_msg(msg_received, LOCAL_PORT)
+                    print("Received ACK:", msg_received.ack_number)
+                    print("Send base:", self.send_base)
                     if msg_received.ack_number == self.send_base:
+                        print("Moving send window")
                         continue_receiving = self.move_send_window()
                     else:
                         logging.debug(
@@ -75,6 +78,7 @@ class SelectiveRepeatProtocol():
             except Exception as e:
                 print(e)
                 print("Error receiving acks")
+        print("Finished receiving acks")
 
     def receive(self, decoded_msg, port, file_controller):
         if decoded_msg.seq_number == self.rcv_base:  # it is the expected sqn
@@ -180,6 +184,9 @@ class SelectiveRepeatProtocol():
                     print(f"[THREAD for ACK {ack_number}] succesfully acked")
                     succesfully_acked = True
                     del self.acks_map[ack_number]
+                # if ack == self.send_base:
+                #     print(f"[THREAD for ACK {ack_number}] moving window")
+                #     self.move_send_window()
             except TimeoutError:
                 logging.error(f"Timeout for ACK {ack_number}")
                 logging.debug("sending msg back to server")
