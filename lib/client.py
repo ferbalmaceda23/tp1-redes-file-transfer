@@ -5,7 +5,7 @@ from lib.flags import HI_ACK
 from lib.constants import BUFFER_SIZE
 from lib.utils import select_protocol
 from lib.message import Message
-
+import time
 
 class Client:
     def __init__(self, ip, port, protocol):

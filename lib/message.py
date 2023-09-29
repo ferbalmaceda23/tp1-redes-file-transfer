@@ -2,7 +2,7 @@ import logging
 from lib.flags import ACK, CLOSE, HI, HI_ACK, NO_FLAGS, ERROR, Flag
 from lib.commands import Command
 from lib.constants import BUFFER_SIZE, EMPTY_DATA, EMPTY_FILE
-
+import time
 
 
 def add_padding(data: bytes, n: int):
