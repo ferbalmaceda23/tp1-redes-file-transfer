@@ -2,7 +2,7 @@ import logging
 from lib.log import prepare_logging
 from lib.message import Command
 from lib.client import Client
-from lib.utils import parse_args_upload
+from lib.args_parser import parse_args_upload
 import sys
 
 
@@ -14,7 +14,7 @@ if __name__ == "__main__":
     try:
         args = parse_args_upload()
         prepare_logging(args)
-        client = Client(args.host, args.port, args.protocol)
+        client = Client(args.host, args.port, args.RDTprotocol)
         client.start(Command.UPLOAD, lambda: upload(client))
     except KeyboardInterrupt:
         print("\nExiting...")
@@ -22,3 +22,4 @@ if __name__ == "__main__":
     except Exception as e:
         logging.error(f"An error occurred: {e}")
         sys.exit(1)
+

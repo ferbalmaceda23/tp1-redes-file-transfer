@@ -24,3 +24,7 @@ class DuplicatedACKError(Exception):
     def __str__(self):
         return "Duplicated ACK"
     pass
+
+
+class WindowFullError(Exception):
+    pass

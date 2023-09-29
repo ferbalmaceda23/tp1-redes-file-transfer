@@ -2,7 +2,7 @@ import sys
 from lib.log import prepare_logging
 from lib.constants import LOCAL_HOST, LOCAL_PORT
 from lib.server import Server
-from lib.utils import parse_args_server
+from lib.args_parser import parse_args_server
 
 if __name__ == "__main__":
     try:

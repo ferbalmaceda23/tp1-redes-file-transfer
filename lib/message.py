@@ -3,6 +3,14 @@ from lib.flags import ACK, CLOSE, HI, HI_ACK, NO_FLAGS, ERROR, Flag
 from lib.commands import Command
 from lib.constants import BUFFER_SIZE, EMPTY_DATA, EMPTY_FILE
 
+
+def add_padding(data: bytes, n: int):
+    k = n - len(data)
+    if k < 0:
+        raise ValueError
+    return data + b"\0" * k
+
+
 """
 command: [DOWNLOAD, UPLOAD]
 flags: [HI, CLOSE, ACK, CORRUPTED_PACKAGE]
@@ -14,13 +22,6 @@ data: [bytes]
 ack_number: [int]
 seq_number: [int]
 """
-
-
-def add_padding(data: bytes, n: int):
-    k = n - len(data)
-    if k < 0:
-        raise ValueError
-    return data + b"\0" * k
 
 
 class Message:
@@ -88,32 +89,27 @@ class Message:
         bytes_arr += self.seq_number.to_bytes(4, signed=False, byteorder='big')
         bytes_arr += self.ack_number.to_bytes(4, signed=False, byteorder='big')
 
-        # fill with 0
-        # relleno_len = 1024 - len(bytes_arr)
-        # relleno = b'0' * relleno_len
-        # bytes_arr += relleno
-        # append data from positoin 1024 to 2048
+        # append data from position 1024 to 2048
         bytes_arr += add_padding(self.data, BUFFER_SIZE - len(bytes_arr))
 
         return bytes_arr
 
     @classmethod
     def ack_msg(cls, command, ack_num):
-        msg = Message(command, ACK, EMPTY_FILE, None, EMPTY_DATA, 0,
-                      ack_number=ack_num)
+        msg = Message(command, ACK, EMPTY_FILE, "", EMPTY_DATA, 0, ack_num)
         return msg.encode()
 
     @classmethod
     def close_msg(cls, command):
-        return Message(command, CLOSE, EMPTY_FILE, None, EMPTY_DATA).encode()
+        return Message(command, CLOSE, EMPTY_FILE, "", EMPTY_DATA).encode()
 
     @classmethod
     def hi_ack_msg(cls, command):
-        return Message(command, HI_ACK, EMPTY_FILE, None, EMPTY_DATA).encode()
+        return Message(command, HI_ACK, EMPTY_FILE, "", EMPTY_DATA).encode()
 
     @classmethod
-    def hi_msg(cls, command):
-        return Message(command, HI, EMPTY_FILE, None, EMPTY_DATA).encode()
+    def hi_msg(cls, command, protocol):
+        return Message(command, HI, len(protocol.name.encode()), "", protocol.name.encode()).encode()
 
     @classmethod
     def download_msg(cls, file_name):
