@@ -51,11 +51,10 @@ class StopAndWaitProtocol():
 
     def send(self, command, port, data, file_controller, receive=None):
         if (self.tries_send >= MAX_TIMEOUT_RETRIES):
-            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
             print(self.tries_send)
             logging.error("Max timeout retries reached")
             raise TimeoutsRetriesExceeded
-        self.tries_send +=1
+        self.tries_send += 1
         msg = Message(command, NO_FLAGS, len(data),
                       file_controller.file_name, data, self.seq_num, 0)
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
@@ -80,7 +79,6 @@ class StopAndWaitProtocol():
         f_controller = FileController.from_args(args.src, args.name, READ_MODE)
         data = f_controller.read()
         file_size = f_controller.get_file_size()
-        print("EN el upload")
         while file_size > 0:
             data_length = len(data)
             try:

@@ -6,11 +6,9 @@ from lib.log import prepare_logging
 from lib.constants import LOCAL_PORT
 from lib.client import Client
 from lib.args_parser import parse_args_download
-from lib.message_utils import send_ack
 from lib.flags import CLOSE, NO_FLAGS
 import sys
 import logging
-import time
 
 # TODO: pasar esto a stop and wait
 def download(client, args):
