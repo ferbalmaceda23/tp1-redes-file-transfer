@@ -43,7 +43,7 @@ class Server:
             try:
                 client_msg_queue = self.clients[client_port]
                 client_msg_queue.put(encoded_message)
-                print("No entro al key Error")
+
             except KeyError:  # client not in clients
                 client_msg_queue = Queue()
                 client_msg_queue.put(encoded_message)
@@ -111,7 +111,6 @@ class Server:
         if decoded_msg.command == Command.DOWNLOAD:
             self.handle_download(client_address, client_msg_queue)
         elif decoded_msg.command == Command.UPLOAD:
-            print("ENtramos al handle upload bastante especifico el mensaje fernando")
             self.handle_upload(client_port, client_msg_queue)
         else:
             logging.info(
@@ -142,7 +141,7 @@ class Server:
         file_size = file_controller.get_file_size()
 
         if type(self.protocol) == SelectiveRepeatProtocol:
-            Thread(target=self.protocol.receive_acks_from_queue, args=(msg_queue,)).start()
+            Thread(target=self.protocol.receive_acks_from_queue, args=(msg_queue)).start()
             while file_size > 0:
                 self.protocol.send(command, client_port, data, file_controller)
                 file_size -= len(data)
