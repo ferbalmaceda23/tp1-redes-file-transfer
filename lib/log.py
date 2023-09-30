@@ -44,8 +44,6 @@ def prepare_logging(args):
 
     logging.basicConfig(level=level_verbosity(), handlers=[stdout_handler])
 
-    logger = logging.getLogger("SERVER") # FIXME: esto no se usa?
-
 
 def log_received_msg(msg, port):
     logging.info(
@@ -57,6 +55,6 @@ def log_received_msg(msg, port):
 def log_sent_msg(msg, seq_num, file_size=0):
     amount_msg = int(file_size/DATA_SIZE)
     if file_size > 0:
-        logging.info(f"Uploading {msg.data_length} bytes... {seq_num}/{amount_msg}")
+        logging.info(f"Uploading {msg.data_length} bytes..."
+                     + f"{seq_num}/{amount_msg}")
     logging.debug(f"Sent {msg} msg with seq_number {seq_num}")
-
