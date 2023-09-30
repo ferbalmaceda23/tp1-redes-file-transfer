@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from lib.constants import STOP_AND_WAIT
 
+
 def parse_args_upload():
     parser = ArgumentParser(
         prog="upload",

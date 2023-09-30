@@ -2,9 +2,11 @@ from lib.constants import BUFFER_SIZE, LOCAL_HOST
 from lib.message import Message
 from lib.log import logging
 
+
 def receive_encoded_from_socket(socket):
     encoded_message, _ = socket.recvfrom(BUFFER_SIZE)
     return encoded_message
+
 
 def send_ack(command, port, ack_number, socket):
     try:

@@ -54,14 +54,14 @@ class Server:
                 except Exception as e:
                     logging.error(f"Error in thread {e}")
 
-
     def handle_client_message(self, encoded_msg, client_address, msg_queue):
         try:
             encoded_msg = msg_queue.get(block=True, timeout=TIMEOUT)
             decoded_msg = Message.decode(encoded_msg)
             if decoded_msg.flags == HI.encoded:
-                self.three_way_handshake(client_address, msg_queue, decoded_msg)
-        except Exception as e: # possible Empty exception
+                self.three_way_handshake(client_address, msg_queue,
+                                         decoded_msg)
+        except Exception as e:  # possible Empty exception
             logging.error(f"Error handling client message: {e}")
             raise e
 
@@ -75,7 +75,7 @@ class Server:
         self.protocol = select_protocol(protocol_RDT)
         self.protocol = self.protocol(self.socket)
         self.send_HI_ACK(client_address, decoded_msg)
-        
+
         try:
             print("Antres del queue block en el handshake")
             encoded_message = msg_queue.get(block=True)
@@ -90,10 +90,12 @@ class Server:
         except Exception as e:
             del self.clients[client_port]
             logging.error(f"Client {client_port}: {e}")
-            logging.info(f"Client {client_port}: handshake timeout." +
-                         " Closing connection.")
+            logging.info(
+                f"Client {client_port}: handshake timeout." +
+                " Closing connection."
+            )
             raise e
-           
+
     def close_client_connection(self, client_address):
         client_port = client_address[1]
         del self.clients[client_port]
@@ -114,7 +116,8 @@ class Server:
             self.handle_upload(client_port, client_msg_queue)
         else:
             logging.info(
-                f"Client {client_port}: unknown command " + "closing connection"
+                f"Client {client_port}: unknown command "
+                + "closing connection"
             )
             self.close_client_connection(client_port)
             self.send_CLOSE(decoded_msg.command, client_address)
@@ -141,7 +144,9 @@ class Server:
         file_size = file_controller.get_file_size()
 
         if type(self.protocol) == SelectiveRepeatProtocol:
-            Thread(target=self.protocol.receive_acks_from_queue, args=(msg_queue)).start()
+            Thread(
+                target=self.protocol.receive_acks_from_queue, args=(msg_queue)
+            ).start()
             while file_size > 0:
                 self.protocol.send(command, client_port, data, file_controller)
                 file_size -= len(data)

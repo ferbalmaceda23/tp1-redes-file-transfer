@@ -35,7 +35,8 @@ class Client:
                 # Manejo específico para la excepción ValueError
                 print(f"Error de valor: {e}")
             except TypeError as e:
-                # Manejo específico para la excepción TypeError (nunca se ejecutará en este caso)
+                # Manejo específico para la excepción TypeError
+                # (nunca se ejecutará en este caso)
                 print(f"Error de tipo: {e}")
             # except Exception as e:
             #     logging.error(f"Server is offline: {e}")

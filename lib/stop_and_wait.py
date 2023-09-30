@@ -26,11 +26,15 @@ class StopAndWaitProtocol():
 
         # dos escenarios:
         # 1) El cliente manda el upload y no llega
-        # En este caso el server se queda esperando (Le sacamos el timeout) y al cliente
-        # se le timeoutea el socket. Entonces vuelve a mandar con el mismo seq number y aca no paso nada
+        # En este caso el server se queda esperando (Le sacamos el timeout)
+        # y al cliente
+        # se le timeoutea el socket. Entonces vuelve a mandar con el mismo
+        # seq number y aca no paso nada
         # 2) El cliente manda upload, el server manda ACK y se pierde
-        # En este caso nosotros aumentamos nuestro ACK pero como nunca llega al cliente el seq_number se mantiene
-        # Por eso nos llega un seq_number dos veces menor que nuestro ACK, en ese caso devolvemos el seq_number + 1 y no hacemos nada pq
+        # En este caso nosotros aumentamos nuestro ACK pero como nunca llega
+        # al cliente el seq_number se mantiene
+        # Por eso nos llega un seq_number dos veces menor que nuestro ACK,
+        # en ese caso devolvemos el seq_number + 1 y no hacemos nada pq
         # ya tenemos ese paquete
         # Si llega un seq que es solamente 1 numero mayor ejecutamos normal
         # Nunca va a llegar un seq mayor al ack por el escenario 1)
@@ -58,7 +62,7 @@ class StopAndWaitProtocol():
         msg = Message(command, NO_FLAGS, len(data),
                       file_controller.file_name, data, self.seq_num, 0)
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
-        log_sent_msg(msg, self.seq_num)
+        log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
         try:
             if receive:
                 msg_received = receive()
