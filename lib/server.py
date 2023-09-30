@@ -77,7 +77,7 @@ class Server:
         self.send_HI_ACK(client_address, decoded_msg)
         
         try:
-            print("Antres del queue block en el handshake")
+            print("Antes del queue block en el handshake")
             encoded_message = msg_queue.get(block=True)
             decoded_msg = Message.decode(encoded_message)
             print("Despues del queue block en el handshake")

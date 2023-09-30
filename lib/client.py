@@ -32,18 +32,16 @@ class Client:
                 break
                 
             except ValueError as e:
-                # Manejo específico para la excepción ValueError
                 print(f"Error de valor: {e}")
             except TypeError as e:
-                # Manejo específico para la excepción TypeError (nunca se ejecutará en este caso)
                 print(f"Error de tipo: {e}")
-            # except Exception as e:
-            #     logging.error(f"Server is offline: {e}")
-            #     raise ServerConnectionError
             except socket.timeout:
                 logging.error("Timeout waiting for HI server " +
                               "response. Retrying...")
                 hi_tries += 1
+            except Exception as e:
+                logging.error(f"Server is offline: {e}")
+                raise ServerConnectionError
 
         if hi_tries == MAX_TIMEOUT_RETRIES:
             logging.error("HI response T.O, max retries reached")

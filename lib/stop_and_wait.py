@@ -35,6 +35,7 @@ class StopAndWaitProtocol():
         # Si llega un seq que es solamente 1 numero mayor ejecutamos normal
         # Nunca va a llegar un seq mayor al ack por el escenario 1)
         if self.ack_num > decoded_msg.seq_number + 1:
+            logging.info(f"Client {port}: received duplicated message")
             log_received_msg(decoded_msg, port)
             send_ack(decoded_msg.command, port, decoded_msg.seq_number + 1,
                      self.socket)
@@ -58,7 +59,7 @@ class StopAndWaitProtocol():
         msg = Message(command, NO_FLAGS, len(data),
                       file_controller.file_name, data, self.seq_num, 0)
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
-        log_sent_msg(msg, self.seq_num)
+        log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
         try:
             if receive:
                 msg_received = receive()

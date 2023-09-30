@@ -10,5 +10,6 @@ def send_ack(command, port, ack_number, socket):
     try:
         ack_msg = Message.ack_msg(command, ack_number)
         socket.sendto(ack_msg, (LOCAL_HOST, port))
+        logging.info(f"Sent ACK: {ack_number}")
     except Exception as e:
         logging.error(f"Error sending ACK: {e}")
