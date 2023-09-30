@@ -1,5 +1,5 @@
 import logging
-from socket import socket, AF_INET, SOCK_DGRAM
+import socket
 from lib.commands import Command
 from lib.exceptions import ServerConnectionError
 from lib.flags import HI_ACK
@@ -16,7 +16,7 @@ class Client:
 
     # handshake
     def start(self, command, action):
-        self.socket = socket(AF_INET, SOCK_DGRAM)
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         if command == Command.UPLOAD:
             self.socket.settimeout(TIMEOUT)
         self.protocol = self.protocol(self.socket)
@@ -24,16 +24,26 @@ class Client:
         hi_tries = 0
         while hi_tries < MAX_TIMEOUT_RETRIES:
             try:
-                self.send_hi_ack_to_server(command, self.protocol)
+                self.send_hi_to_server(command, self.protocol)
+                print("Waiting for server response...")
                 enconded_message, _ = self.socket.recvfrom(BUFFER_SIZE)
+                print("Received server response")
                 maybe_hi_ack = Message.decode(enconded_message)
                 break
+                
+            except ValueError as e:
+                # Manejo específico para la excepción ValueError
+                print(f"Error de valor: {e}")
+            except TypeError as e:
+                # Manejo específico para la excepción TypeError (nunca se ejecutará en este caso)
+                print(f"Error de tipo: {e}")
+            # except Exception as e:
+            #     logging.error(f"Server is offline: {e}")
+            #     raise ServerConnectionError
             except socket.timeout:
-                logging.error("Timeout waiting for HI server response. Retrying...")
+                logging.error("Timeout waiting for HI server " +
+                              "response. Retrying...")
                 hi_tries += 1
-            except Exception as e:
-                logging.error(f"Server is offline: {e}")
-                raise ServerConnectionError
 
         if hi_tries == MAX_TIMEOUT_RETRIES:
             logging.error("HI response T.O, max retries reached")
@@ -45,7 +55,7 @@ class Client:
 
         action()
 
-    def send_hi_ack_to_server(self, command, protocol):
+    def send_hi_to_server(self, command, protocol):
         hi_msg = Message.hi_msg(command, protocol)
         self.send(hi_msg)
         logging.info("Sent HI to server")

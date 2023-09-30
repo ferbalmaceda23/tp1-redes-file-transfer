@@ -1,23 +1,36 @@
 import logging
 
+from lib.constants import DATA_SIZE
+
 # Para despues
-RED = '\033[91m'
-WHITE = '\033[0m'
-GREEN = '\033[92m'
-BLUE = '\033[94m'
+RED = "\033[91m"
+WHITE = "\033[0m"
+GREEN = "\033[92m"
+BLUE = "\033[94m"
 
-error_formatter = logging.Formatter(f"%(asctime)s - {RED} [ %(levelname)s ]\
-            {WHITE} - %(message)s (%(filename)s:%(lineno)d)")
-info_formatter = logging.Formatter(f"%(asctime)s - {BLUE} [ %(levelname)s ]\
-            {WHITE} - %(message)s (%(filename)s:%(lineno)d)")
-debug_formatter = logging.Formatter(f"%(asctime)s - {GREEN} [ %(levelname)s ]\
-            {WHITE} - %(message)s (%(filename)s:%(lineno)d)")
+error_format = logging.Formatter(
+    f"[%(asctime)s] - {RED}[%(levelname)s]{WHITE}- %(message)s"
+)
+info_format = logging.Formatter(
+    f"[%(asctime)s] - {GREEN}[%(levelname)s]{WHITE}- %(message)s"
+)
+debug_format = logging.Formatter(
+    f"[%(asctime)s] - {BLUE}[%(levelname)s]{WHITE}- %(message)s"
+)
 
 
-formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] - %(message)s')
+class RDTFormatter(logging.Formatter):
+    def format(self, record):
+        if record.levelno == logging.INFO:
+            return info_format.format(record)
+        elif record.levelno == logging.DEBUG:
+            return debug_format.format(record)
+        else:
+            return error_format.format(record)
+
 
 stdout_handler = logging.StreamHandler()
-stdout_handler.setFormatter(formatter)
+stdout_handler.setFormatter(RDTFormatter())
 
 
 def prepare_logging(args):
@@ -28,28 +41,20 @@ def prepare_logging(args):
             return logging.ERROR
         else:
             return logging.INFO
-    
+
     logging.basicConfig(level=level_verbosity(), handlers=[stdout_handler])
-    error_stdout_handler = logging.StreamHandler()
-    error_stdout_handler.setFormatter(error_formatter)
-
-    info_stdout_handler = logging.StreamHandler()
-    info_stdout_handler.setFormatter(info_formatter)
-
-    debug_stdout_handler = logging.StreamHandler()
-    debug_stdout_handler.setFormatter(debug_formatter)
-
-    logger = logging.getLogger('SERVER')
-    logger.addHandler(error_stdout_handler)
-    logger.addHandler(info_stdout_handler) 
-    logger.addHandler(debug_stdout_handler)
 
 
-def log_received_msg(msg, port):  
+def log_received_msg(msg, port):
     logging.info(
-        f"Client {port}: received {len(msg.data)}" +
-        f" bytes, seq_number: {msg.seq_number}")
+        f"Client {port}: received {len(msg.data)}"
+        + f" bytes, seq_number: {msg.seq_number}"
+    )
 
-def log_sent_msg(msg, seq_num):
-    logging.debug(
-        f"Sent {msg} msg with seq_number {seq_num}")
+
+def log_sent_msg(msg, seq_num, file_size=0):
+    amount_msg = int(file_size/DATA_SIZE)
+    if file_size > 0:
+        logging.info(f"Uploading {msg.data_length} bytes..."
+                     + f"{seq_num}/{amount_msg}")
+    logging.debug(f"Sent {msg} msg with seq_number {seq_num}")

@@ -28,3 +28,8 @@ class DuplicatedACKError(Exception):
 
 class WindowFullError(Exception):
     pass
+
+class TimeoutsRetriesExceeded(Exception):
+    def __str__(self):
+        return "Timeouts retries exceeded"
+    pass

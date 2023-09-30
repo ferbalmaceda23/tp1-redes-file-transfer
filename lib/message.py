@@ -2,7 +2,7 @@ import logging
 from lib.flags import ACK, CLOSE, HI, HI_ACK, NO_FLAGS, ERROR, Flag
 from lib.commands import Command
 from lib.constants import BUFFER_SIZE, EMPTY_DATA, EMPTY_FILE
-
+import time
 
 def add_padding(data: bytes, n: int):
     k = n - len(data)
@@ -119,5 +119,5 @@ class Message:
 
     @classmethod
     def error_msg(cls, command, error_msg):
-        msg = Message(command, ERROR, EMPTY_FILE, error_msg.encode())
+        msg = Message(command, ERROR, EMPTY_FILE, error_msg, EMPTY_DATA)
         return msg.encode()
