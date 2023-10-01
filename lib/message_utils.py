@@ -14,3 +14,7 @@ def send_ack(command, port, ack_number, socket):
         socket.sendto(ack_msg, (LOCAL_HOST, port))
     except Exception as e:
         logging.error(f"Error sending ACK: {e}")
+
+
+def send_close(socket, command, client_address):
+    socket.sendto(Message.close_msg(command), client_address)

@@ -4,11 +4,11 @@ from threading import Thread, Lock
 from lib.commands import Command
 from lib.constants import DATA_SIZE, LOCAL_HOST, TIMEOUT
 from lib.constants import LOCAL_PORT, READ_MODE, SELECTIVE_REPEAT
-from lib.constants import MAX_WINDOW_SIZE, MAX_RESEND_TRIES
+from lib.constants import MAX_WINDOW_SIZE, MAX_ACK_RESEND_TRIES
 from lib.exceptions import WindowFullError
 from lib.file_controller import FileController
 from lib.flags import ACK, NO_FLAGS
-from lib.message_utils import receive_encoded_from_socket, send_ack
+from lib.message_utils import receive_encoded_from_socket, send_ack, send_close
 from lib.log import log_received_msg, log_sent_msg
 from lib.message import Message
 from queue import Queue, Empty
@@ -57,103 +57,124 @@ class SelectiveRepeatProtocol:
                 logging.error("Timeout on thread ack")
             except Exception as e:
                 logging.error(f"Error receiving acks: {e}")
-        print("Sending close msg")
-        self.socket.sendto(Message.close_msg(Command.DOWNLOAD), (LOCAL_HOST, client_port))
-        print("sent close")
+        logging.debug("Sending close msg")
+        send_close(self.socket, Command.DOWNLOAD, (LOCAL_HOST, client_port))
 
     # Receives acks in client from server
-    def receive_acks(self):
+    def receive_acks(self, msq_queue=None):
         continue_receiving = True
         while continue_receiving:
             try:
                 maybe_ack = receive_encoded_from_socket(self.socket)
                 msg_received = Message.decode(maybe_ack)
                 if msg_received.flags == ACK.encoded:
-                    print(f"Received ACK: {msg_received.ack_number}")
+                    ack_number = msg_received.ack_number
+                    print(f"Received ACK: {ack_number}")
                     self.join_ack_thread(msg_received)
-                    self.not_acknowledged_lock.acquire()
-                    if self.not_acknowledged > 0:
-                        self.not_acknowledged -= 1
-                    self.not_acknowledged_lock.release()
+                    self.modify_not_acknowledged(-1)
                     self.acks_received += 1
                     log_received_msg(msg_received, LOCAL_PORT)
-                    if msg_received.ack_number == self.send_base:
-                        print("Moving send window. Current send base:", self.send_base)
+                    if self.is_base_ack(ack_number):
+                        print("Moving send window."
+                              + f"Current send base: {self.send_base}")
                         self.move_send_window()
                     else:
-                        logging.debug(f"Received messy ACK: {msg_received.ack_number}")
+                        logging.debug(f"Received messy ACK: {ack_number}")
                     continue_receiving = self.acks_received <= self.max_sqn
             except socket.timeout:
-                logging.error("Timeout on thread ack")
+                logging.error("Timeout on main thread ack")
             except Exception as e:
                 logging.error(f"Error receiving acks: {e}")
-        self.socket.sendto(Message.close_msg(Command.UPLOAD), (LOCAL_HOST, LOCAL_PORT))
+        logging.debug("Sending close msg")
+        send_close(self.socket, Command.UPLOAD, (LOCAL_HOST, LOCAL_PORT))
 
-        
+    def is_base_ack(self, ack_number):
+        return ack_number == self.send_base
+
     def join_ack_thread(self, msg_received):
         thread_is_alive = False
         while not thread_is_alive:
             try:
-                self.acks_map[msg_received.ack_number].put(msg_received.ack_number)
+                ack_num = msg_received.ack_number
+                self.acks_map[ack_num].put(ack_num)
                 thread_is_alive = True
-                logging.debug("Joining thread: %s", msg_received.ack_number)
-                self.thread_pool[msg_received.ack_number].join()
-                if self.thread_pool[msg_received.ack_number].is_alive():
+                logging.debug("Joining thread: %s", ack_num)
+                self.thread_pool[ack_num].join()
+                if self.thread_pool[ack_num].is_alive():
                     logging.debug("Failed to join thread")
 
-                del self.acks_map[msg_received.ack_number]
-                del self.thread_pool[msg_received.ack_number]
+                del self.acks_map[ack_num]
+                del self.thread_pool[ack_num]
             except KeyError:
                 continue
 
     def receive(self, decoded_msg, port, file_controller):
         print("Waiting for ack", self.rcv_base)
-        print("Buffered seq nums", [x.seq_number for x in self.buffer])
-        print("el seq number es", decoded_msg.seq_number)
-        if decoded_msg.seq_number == self.rcv_base:  # it is the expected sqn
-            logging.debug("Received expected sqn")
-            logging.debug(f"Escribiendo el archivo de seq number {decoded_msg.seq_number}")
-            logging.debug(f"Escribiendo {len(decoded_msg.data)} bytes")
-            file_controller.write_file(decoded_msg.data)
-            log_received_msg(decoded_msg, port)
-            self.process_buffer(file_controller)
-            logging.debug(f"Sending ACK: {decoded_msg.seq_number}")
-            send_ack(decoded_msg.command, port, decoded_msg.seq_number, self.socket)
-            self.seq_num += 1
+
+        if decoded_msg.seq_number == self.rcv_base:
+            self.process_expected_packet(decoded_msg, port, file_controller)
         elif self.packet_is_within_window(decoded_msg):
-            log_received_msg(decoded_msg, port)
-            # it is not the expected sqn order but it is within the window
-            logging.debug(f"Received msg: {decoded_msg.seq_number}")
-            if decoded_msg.seq_number not in [x.seq_number for x in self.buffer]:
-                self.buffer.append(decoded_msg)
-            logging.debug(f"Sending ACK: {decoded_msg.seq_number}")
-            send_ack(decoded_msg.command, port, decoded_msg.seq_number, self.socket)
-        elif decoded_msg.seq_number < self.rcv_base:  # client lost ack, send ack again
-            logging.debug(f"Message is already acked: {decoded_msg.seq_number}")
-            send_ack(decoded_msg.command, port, decoded_msg.seq_number, self.socket)
+            self.buffer_packet(decoded_msg, port)
+        elif self.already_acknowledged(decoded_msg):
+            # client lost ack, send ack again
+            self.send_duplicated_ack(decoded_msg, port)
         else:
-            logging.error(f"la ventana va de {self.rcv_base} hasta {self.rcv_base + self.window_size -1}")
-            logging.error(f"Mensaje no esta dentro de la ventana {decoded_msg.seq_number}")
-        # otherwise it is not within the window and it is discarded
+            # otherwise it is not within the window and it is discarded
+            logging.error(f"Window starts at {self.rcv_base}"
+                          + f"& ends at {self.rcv_base + self.window_size-1}")
+            logging.error(f"Msg out of window: {decoded_msg.seq_number}")
+
+    def process_expected_packet(self, decoded_msg, port, file_controller):
+        logging.debug("Received expected sqn")
+        self.write_to_file(file_controller, decoded_msg)
+        log_received_msg(decoded_msg, port)
+        self.process_buffer(file_controller)
+        logging.debug(f"Sending ACK: {decoded_msg.seq_number}")
+        send_ack(decoded_msg.command, port, decoded_msg.seq_number, self.socket)
+        self.seq_num += 1
+
+    def already_acknowledged(self, decoded_msg):
+        return decoded_msg.seq_number < self.rcv_base
+
+    def send_duplicated_ack(self, decoded_msg, port):
+        logging.debug(f"Message was already acked: {decoded_msg.seq_number}")
+        send_ack(decoded_msg.command, port, decoded_msg.seq_number, self.socket)
+
+    def buffer_packet(self, decoded_msg, port):
+        log_received_msg(decoded_msg, port)
+        logging.debug(f"Received msg: {decoded_msg.seq_number}")
+        if self.ack_is_not_repeated(decoded_msg):
+            self.buffer.append(decoded_msg)
+        logging.debug(f"Sending ACK: {decoded_msg.seq_number}")
+        send_ack(decoded_msg.command, port, decoded_msg.seq_number, self.socket)
+
+    def ack_is_not_repeated(self, decoded_msg):
+        unique_sqns = [x.seq_number for x in self.buffer]
+        logging.debug("Buffered seq nums", unique_sqns)
+        return decoded_msg.seq_number not in unique_sqns
 
     def process_buffer(self, file_controller):
-        # write only those buffered pkt that are in order with the base
-        # Those who are not in order correspond to other packet loss
+        """
+        Write to file those buffered packets that are after
+        rcv_base and before a "jump" (another loss) in their sqn.
+        """
         self.buffer.sort(key=lambda x: x.seq_number)
         next_base = self.rcv_base + 1
-        buffer_restante = []
+        remaining_buffer = []
 
         for packet in self.buffer:
             if packet.seq_number == next_base:
-                logging.debug(f"Escribiendo el archivo de seq number {packet.seq_number}")
-                logging.debug(f"Escribiendo {len(packet.data)} bytes")
-                file_controller.write_file(packet.data)
+                self.write_to_file(file_controller, packet)
                 next_base += 1
             else:
-                buffer_restante.append(packet)
+                remaining_buffer.append(packet)
 
-        self.buffer = buffer_restante
+        self.buffer = remaining_buffer
         self.move_rcv_window(next_base - self.rcv_base)
+
+    def write_to_file(self, file_controller, packet):
+        logging.debug(f"Writing to file sqn: {packet.seq_number}")
+        file_controller.write_file(packet.data)
 
     def packet_is_within_window(self, decoded_msg):
         max_w_size = self.window_size - 1
@@ -162,7 +183,7 @@ class SelectiveRepeatProtocol:
         return is_after_base and is_before_max
 
     def send(self, command, port, data, file_controller):
-        if self.not_acknowledged < self.window_size:
+        if self.window_is_not_full():
             msg = Message(
                 command,
                 NO_FLAGS,
@@ -173,22 +194,29 @@ class SelectiveRepeatProtocol:
                 0,
             )
             self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
-
-            ack_queue = Queue()
-            self.acks_map[self.seq_num] = ack_queue
-            args = (self.seq_num, ack_queue, msg.encode(), port)
-            wait_ack_thread = Thread(target=self.wait_for_ack, args=args)
-            wait_ack_thread.start()
-            self.thread_pool[self.seq_num] = wait_ack_thread
-
+            self.spawn_packet_ack_thread(port, msg)
             log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
             self.seq_num += 1
-            self.not_acknowledged_lock.acquire()
-            print("Incrementing not ack:", self.not_acknowledged)
-            self.not_acknowledged += 1
-            self.not_acknowledged_lock.release()
+            self.modify_not_acknowledged(1)
         else:
             raise WindowFullError
+
+    def window_is_not_full(self):
+        return self.not_acknowledged < self.window_size
+
+    def spawn_packet_ack_thread(self, port, msg):
+        ack_queue = Queue()
+        self.acks_map[self.seq_num] = ack_queue
+        args = (self.seq_num, ack_queue, msg.encode(), port)
+        wait_ack_thread = Thread(target=self.wait_for_ack, args=args)
+        wait_ack_thread.start()
+        self.thread_pool[self.seq_num] = wait_ack_thread
+
+    def modify_not_acknowledged(self, amount):
+        self.not_acknowledged_lock.acquire()
+        if (amount < 0 and self.not_acknowledged > 0) or amount > 0:
+            self.not_acknowledged += amount
+        self.not_acknowledged_lock.release()
 
     def upload(self, args):
         f_controller = FileController.from_args(args.src, args.name, READ_MODE)
@@ -206,12 +234,11 @@ class SelectiveRepeatProtocol:
                 continue
             data = f_controller.read()
             file_size -= data_length
+
         ack_thread.join()
         f_controller.close()
 
     def move_rcv_window(self, shift):
-        print("moviendo rcv window ", self.rcv_base + shift)
-        #if (self.rcv_base + shift <= 16):
         self.rcv_base += shift
 
     def move_send_window(self):
@@ -235,14 +262,14 @@ class SelectiveRepeatProtocol:
                 print(f"[THREAD for ACK {ack_number}] succesfully acked")
                 succesfully_acked = True
             except Empty:
-                if tries == MAX_RESEND_TRIES:
+                if tries == MAX_ACK_RESEND_TRIES:
                     logging.error(f"Max tries reached for ACK {ack_number}")
                     break
                 else:
-                    logging.error(f"Timeout empty for ACK {ack_number}")
+                    logging.error(f"Timeout for ACK {ack_number}")
                     msg = Message.decode(encoded_msg)
                     try:
-                        logging.debug(f"sending msg back to server with msg {msg}")
+                        logging.debug(f"Sending msg back to server: {msg}")
                         self.socket.sendto(encoded_msg, (LOCAL_HOST, port))
                     except Exception as e:
                         logging.error("Error sending msg back to server: %s", e)

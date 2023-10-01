@@ -12,6 +12,7 @@ from lib.commands import Command
 from lib.message import Message
 from lib.selective_repeat import SelectiveRepeatProtocol
 from lib.utils import get_file_name, select_protocol
+from lib.message_utils import send_close
 
 
 class Server:
@@ -122,14 +123,11 @@ class Server:
                 + "closing connection"
             )
             self.close_client_connection(client_port)
-            self.send_CLOSE(decoded_msg.command, client_address)
+            send_close(self.socket, decoded_msg.command, client_address)
 
     def send_HI_ACK(self, client_address, decoded_msg):
         hi_ack = Message.hi_ack_msg(decoded_msg.command)
         self.socket.sendto(hi_ack, client_address)
-
-    def send_CLOSE(self, command, client_address):
-        self.socket.sendto(Message.close_msg(command), client_address)
 
     def handle_download(self, client_address, msg_queue):
         client_port = client_address[1]
@@ -194,7 +192,7 @@ class Server:
                 data = file_controller.read()
                 file_size -= data_length
 
-        self.send_CLOSE(command, client_address)
+        send_close(self.socket, command, client_address)
         retries = 0
         while retries <= MAX_TIMEOUT_RETRIES:
             try:

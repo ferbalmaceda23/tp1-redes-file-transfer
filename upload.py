@@ -1,5 +1,4 @@
 import logging
-import socket
 from lib.log import prepare_logging
 from lib.message import Command
 from lib.client import Client
