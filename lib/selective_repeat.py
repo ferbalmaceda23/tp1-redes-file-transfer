@@ -39,18 +39,8 @@ class SelectiveRepeatProtocol:
                 maybe_ack = self.receive_msg(msq_queue)
                 msg_received = Message.decode(maybe_ack)
                 if msg_received.flags == ACK.encoded:
-                    ack_number = msg_received.ack_number
-                    print(f"Received ACK: {ack_number}")
-                    self.join_ack_thread(msg_received)
-                    self.modify_not_acknowledged(-1)
-                    self.acks_received += 1
-                    log_received_msg(msg_received, client_port)
-                    if self.is_base_ack(ack_number):
-                        print("Moving send window."
-                              + f"Current send base: {self.send_base}")
-                        self.move_send_window()
-                    else:
-                        logging.debug(f"Received messy ACK: {ack_number}")
+                    self.receive_ack_and_join_ack_thread(client_port,
+                                                         msg_received)
                     continue_receiving = self.acks_received <= self.max_sqn
             except socket.timeout or Empty:
                 logging.error("Timeout on main thread ack")
@@ -64,6 +54,20 @@ class SelectiveRepeatProtocol:
                 logging.error(f"Error receiving acks: {e}")
         logging.debug("Sending close msg")
         self.send_close_and_wait_ack(msq_queue, client_port)
+
+    def receive_ack_and_join_ack_thread(self, client_port, msg_received):
+        ack_number = msg_received.ack_number
+        print(f"Received ACK: {ack_number}")
+        self.join_ack_thread(msg_received)
+        self.modify_not_acknowledged(-1)
+        self.acks_received += 1
+        log_received_msg(msg_received, client_port)
+        if self.is_base_ack(ack_number):
+            print("Moving send window."
+                  + f"Current send base: {self.send_base}")
+            self.move_send_window()
+        else:
+            logging.debug(f"Received messy ACK: {ack_number}")
 
     def send_close_and_wait_ack(self, msq_queue, client_port):
         close_tries = 0
@@ -81,7 +85,7 @@ class SelectiveRepeatProtocol:
     def receive_msg(self, msq_queue):
         if msq_queue:
             maybe_ack = msq_queue.get(block=True, timeout=1.5)
-                    # TODO ajustar TO o hacer cte
+            # TODO ajustar TO o hacer cte
         else:
             maybe_ack = receive_encoded_from_socket(self.socket)
         return maybe_ack
@@ -237,10 +241,10 @@ class SelectiveRepeatProtocol:
             file_size -= data_length
 
         ack_thread.join(timeout=10)
-        print("Closing connection to clien 11efdt")
+        print("joined ack thread")
 
         f_controller.close()
-        print("Closing connection to client")
+        print("closed file")
 
     def move_rcv_window(self, shift):
         self.rcv_base += shift
