@@ -81,10 +81,8 @@ class Server:
         self.send_hi_ack(client_address, decoded_msg)
 
         try:
-            print("Antes del queue block en el handshake")
             encoded_message = msg_queue.get(block=True)
             decoded_msg = Message.decode(encoded_message)
-            print("Despues del queue block en el handshake")
             if decoded_msg.flags == HI_ACK.encoded:
                 self.init_file_transfer_operation(
                     msg_queue, decoded_msg, client_address
@@ -184,7 +182,7 @@ class Server:
                 file_size -= data_length
             send_close(self.socket, command, client_address)
             retries = 0
-            while retries <= MAX_TIMEOUT_RETRIES:
+            while retries < MAX_TIMEOUT_RETRIES:
                 try:
                     msg = msg_queue.get(block=True, timeout=1.5)
                     if Message.decode(msg).flags == CLOSE_ACK.encoded:

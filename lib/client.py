@@ -23,19 +23,13 @@ class Client:
         while hi_tries < MAX_TIMEOUT_RETRIES:
             try:
                 self.send_hi_to_server(command, self.protocol)
-                print("Waiting for server response...")
                 enconded_message, _ = self.socket.recvfrom(BUFFER_SIZE)
-                print("Received server response")
                 maybe_hi_ack = Message.decode(enconded_message)
                 break
-
             except ValueError as e:
-                print(f"Error de valor: {e}")
+                logging.error(f"Error: {e}")
             except TypeError as e:
-                print(f"Error de tipo: {e}")
-            # except Exception as e:
-            #     logging.error(f"Server is offline: {e}")
-            #     raise ServerConnectionError
+                logging.error(f"Error: {e}")
             except socket.timeout:
                 logging.error("Timeout waiting for HI server " +
                               "response. Retrying...")

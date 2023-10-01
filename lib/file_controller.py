@@ -45,3 +45,6 @@ class FileController():
 
     def close(self):
         self.file.close()
+
+    def delete(self):
+        os.remove(self.src)

@@ -21,23 +21,18 @@ def download(client, args):
     try:
         if not os.path.isdir(DOWNLOADS_DIR):
             os.makedirs(DOWNLOADS_DIR, exist_ok=True)
-        if args.RDTprotocol == STOP_AND_WAIT:
-            file_name = get_file_name(DOWNLOADS_DIR, args.dst)
-            file_controller = FileController.from_file_name(file_name,
-                                                            WRITE_MODE)
-            download_using_protocol(client, args, file_controller)
-        elif args.RDTprotocol == SELECTIVE_REPEAT:
-            file_controller = FileController.from_args(args.dst, args.name,
-                                                       WRITE_MODE)
-            download_using_protocol(client, args, file_controller)
-        else:
+        if args.RDTprotocol not in [STOP_AND_WAIT, SELECTIVE_REPEAT]:
             logging.error("Invalid RDT protocol")
             sys.exit(1)
+        
+        file_name = get_file_name(DOWNLOADS_DIR, args.dst)
+        file_controller = FileController.from_file_name(file_name,
+                                                        WRITE_MODE)
+        download_using_protocol(client, args, file_controller)
     except ServerConnectionError:
         logging.error("Server is offline")
         sys.exit(1)
     except Exception as e:
-        print("corre denuevo esto es culpa de fernando")
         logging.error(f"An error occurred: {e}")
         sys.exit(1)
 
@@ -51,7 +46,9 @@ def download_using_protocol(client, args, file_controller):
         encoded_messge, _ = client.receive()
     except socket.timeout:
         logging.error("Connection error: HI_ACK not received")
+        file_controller.delete()
         raise ServerConnectionError
+    
     client.socket.settimeout(None)
     message = Message.decode(encoded_messge)
     while message.flags != CLOSE.encoded:  # TODO se esta perdiendo el close?
