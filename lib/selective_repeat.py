@@ -127,7 +127,7 @@ class SelectiveRepeatProtocol:
 
     def ack_is_not_repeated(self, decoded_msg):
         unique_sqns = [x.seq_number for x in self.buffer]
-        logging.debug("Buffered seq nums", unique_sqns)
+        logging.debug(f"Buffered seq nums {unique_sqns}")
         return decoded_msg.seq_number not in unique_sqns
 
     def process_buffer(self, file_controller):

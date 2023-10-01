@@ -216,7 +216,6 @@ class Server:
         file_name = get_file_name(self.storage, msg.file_name)
         logging.info(f"Uploading file to: {file_name}")
         file_controller = FileController.from_file_name(file_name, WRITE_MODE)
-
         while msg.flags != CLOSE.encoded:
             self.protocol.receive(msg, client_port, file_controller)
             msg = self.dequeue_encoded_msg(client_msg_queue)
