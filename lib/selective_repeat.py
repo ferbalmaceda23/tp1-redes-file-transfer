@@ -95,7 +95,7 @@ class SelectiveRepeatProtocol:
         else:
             # otherwise it is not within the window and it is discarded
             logging.error(f"Window starts at {self.rcv_base}"
-                          + f"& ends at {self.rcv_base + self.window_size-1}")
+                          + f" & ends at {self.rcv_base + self.window_size-1}")
             logging.error(f"Msg out of window: {decoded_msg.seq_number}")
 
     def process_expected_packet(self, decoded_msg, port, file_controller):
