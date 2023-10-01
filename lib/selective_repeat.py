@@ -31,32 +31,11 @@ class SelectiveRepeatProtocol:
         #self.max_sqn = 16
 
     # receive ACKs in server from client
-    def receive_acks_from_queue(self, client_queue: Queue):
-        """
-        while True:
-            try:
-                maybe_ack = client_queue.get(block=True)
-                msg_received = Message.decode(maybe_ack)
-                if msg_received.flags == ACK.encoded:
-                    print(f"Received ACK: {msg_received.ack_number}")
-                    self.acks_map[msg_received.ack_number].put(msg_received.ack_number)
-                    self.thread_pool[msg_received.ack_number].join()
-                    with self.not_acknowledged_lock:
-                        if self.not_acknowledged > 0:
-                            self.not_acknowledged -= 1
-                    log_received_msg(msg_received, LOCAL_PORT)
-                    if msg_received.ack_number == self.send_base:
-                        self.move_send_window()
-                    else:
-                        logging.debug(f"Received messy ACK: {msg_received.ack_number}")
-            except Exception as e:
-                logging.error("Error receiving ack: %s", e)
-                print("Error receiving acks!")
-        """
+    def receive_acks_from_queue(self, client_queue: Queue, client_port):
         continue_receiving = True
         while continue_receiving:
             try:
-                maybe_ack = client_queue.get(block=True)
+                maybe_ack = client_queue.get(block=True, timeout=1.5)
                 msg_received = Message.decode(maybe_ack)
                 if msg_received.flags == ACK.encoded:
                     print(f"Received ACK: {msg_received.ack_number}")
@@ -73,11 +52,14 @@ class SelectiveRepeatProtocol:
                     else:
                         logging.debug(f"Received messy ACK: {msg_received.ack_number}")
                     continue_receiving = self.acks_received <= self.max_sqn
-            except socket.timeout:
+                    print("continue receiving", continue_receiving)
+            except Empty:
                 logging.error("Timeout on thread ack")
             except Exception as e:
                 logging.error(f"Error receiving acks: {e}")
-        self.socket.sendto(Message.close_msg(Command.DOWNLOAD), (LOCAL_HOST, LOCAL_PORT))
+        print("Sending close msg")
+        self.socket.sendto(Message.close_msg(Command.DOWNLOAD), (LOCAL_HOST, client_port))
+        print("sent close")
 
     # Receives acks in client from server
     def receive_acks(self):

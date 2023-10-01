@@ -54,7 +54,7 @@ class StopAndWaitProtocol():
         log_sent_msg(msg, self.seq_num)
 
     def send(self, command, port, data, file_controller, receive=None):
-        if (self.tries_send >= MAX_TIMEOUT_RETRIES):
+        if self.tries_send >= MAX_TIMEOUT_RETRIES:
             print(self.tries_send)
             logging.error("Max timeout retries reached")
             raise TimeoutsRetriesExceeded
@@ -92,8 +92,6 @@ class StopAndWaitProtocol():
             except socket.timeout:
                 logging.error("Timeout! Retrying...")
                 continue
-            # except Exception as e:
-            #     print("ninguna de esas", e)
             data = f_controller.read()
             file_size -= data_length
         self.socket.sendto(Message.close_msg(Command.UPLOAD),

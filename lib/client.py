@@ -17,8 +17,7 @@ class Client:
     # handshake
     def start(self, command, action):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        if command == Command.UPLOAD:
-            self.socket.settimeout(TIMEOUT)
+        self.socket.settimeout(TIMEOUT)
         self.protocol = self.protocol(self.socket)
 
         hi_tries = 0
@@ -53,7 +52,7 @@ class Client:
         if maybe_hi_ack.flags == HI_ACK.encoded:
             self.send(Message.hi_ack_msg(command))
             logging.info("Connected to server")
-
+            
         action()
 
     def send_hi_to_server(self, command, protocol):

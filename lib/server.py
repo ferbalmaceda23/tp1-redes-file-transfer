@@ -1,13 +1,13 @@
 import logging
 import os
 from queue import Queue, Empty
-from lib.exceptions import DuplicatedACKError
+from lib.exceptions import DuplicatedACKError, WindowFullError
 from lib.file_controller import FileController
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
-from lib.constants import DATA_SIZE, READ_MODE, BUFFER_SIZE, TIMEOUT
+from lib.constants import DATA_SIZE, LOCAL_HOST, MAX_TIMEOUT_RETRIES, READ_MODE, BUFFER_SIZE, TIMEOUT
 from lib.constants import WRITE_MODE, DEFAULT_FOLDER, ERROR_EXISTING_FILE
-from lib.flags import HI, HI_ACK, CLOSE
+from lib.flags import CLOSE_ACK, HI, HI_ACK, CLOSE
 from lib.commands import Command
 from lib.message import Message
 from lib.selective_repeat import SelectiveRepeatProtocol
@@ -53,7 +53,6 @@ class Server:
                     client = Thread(target=self.handle_client_message, 
                                     args=args)
                     client.start()
-                #    client.join()
                 except Exception as e:
                     logging.error(f"Error in thread {e}")
 
@@ -80,7 +79,7 @@ class Server:
         self.send_HI_ACK(client_address, decoded_msg)
 
         try:
-            print("Antres del queue block en el handshake")
+            print("Antes del queue block en el handshake")
             encoded_message = msg_queue.get(block=True)
             decoded_msg = Message.decode(encoded_message)
             print("Despues del queue block en el handshake")
@@ -146,15 +145,35 @@ class Server:
         data = file_controller.read()
         file_size = file_controller.get_file_size()
 
+
         if type(self.protocol) == SelectiveRepeatProtocol:
-            Thread(
-                target=self.protocol.receive_acks_from_queue, args=(msg_queue,)
-            ).start()
+            ack_thread = Thread(
+                target=self.protocol.receive_acks_from_queue, args=(msg_queue, client_port,)
+            )
+            ack_thread.start()
             self.protocol.set_window_size(int(file_size / DATA_SIZE))
             while file_size > 0:
-                self.protocol.send(command, client_port, data, file_controller)
+                try:
+                    self.protocol.send(command, client_port, data, file_controller)
+                except WindowFullError:
+                    continue
                 file_size -= len(data)
                 data = file_controller.read()
+            ack_thread.join()
+
+            print("El timeout es: ", self.socket.timeout)
+            retries = 0
+            while retries <= MAX_TIMEOUT_RETRIES:
+                try:
+                    msg = msg_queue.get(block=True, timeout=1.5)
+                    if Message.decode(msg).flags == CLOSE_ACK.encoded:
+                        break
+                except Empty:
+                    logging.error("Timeout! Retrying to send CLOSE...")
+                    self.socket.sendto(Message.close_msg(Command.DOWNLOAD), (LOCAL_HOST, client_port))
+                    retries += 1
+            file_controller.close()
+            logging.info(f"Closing connection to client {client_port}")
         else:
             while file_size > 0:
                 data_length = len(data)
@@ -177,6 +196,16 @@ class Server:
                 file_size -= data_length
 
         self.send_CLOSE(command, client_address)
+        retries = 0
+        while retries <= MAX_TIMEOUT_RETRIES:
+            try:
+                msg = msg_queue.get(block=True, timeout=1.5)
+                if Message.decode(msg).flags == CLOSE_ACK.encoded:
+                    break
+            except Empty:
+                logging.error("Timeout! Retrying to send CLOSE...")
+                self.socket.sendto(Message.close_msg(Command.DOWNLOAD), (LOCAL_HOST, client_port))
+                retries += 1
         file_controller.close()
 
     def handle_upload(self, client_port, client_msg_queue):
