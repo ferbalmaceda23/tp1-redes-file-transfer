@@ -160,8 +160,7 @@ class Server:
                 file_size -= len(data)
                 data = file_controller.read()
             ack_thread.join()
-
-            print("El timeout es: ", self.socket.timeout)
+            
             retries = 0
             while retries <= MAX_TIMEOUT_RETRIES:
                 try:

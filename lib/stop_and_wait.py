@@ -76,7 +76,7 @@ class StopAndWaitProtocol():
                 self.tries_send = 0
                 self.seq_num += 1
         except socket.timeout:
-            logging.error("Timeout sending message")
+            logging.error("Timeout receiving ACK message")
             raise socket.timeout
 
     def upload(self, args):
