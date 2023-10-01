@@ -24,3 +24,5 @@ DEFAULT_FOLDER = 'saved-files'
 ERROR_EXISTING_FILE = "File already exists"
 
 MAX_WINDOW_SIZE = 10
+
+DOWNLOADS_DIR = "downloads"

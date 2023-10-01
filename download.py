@@ -1,6 +1,7 @@
 import socket
 from lib.commands import Command
-from lib.constants import SELECTIVE_REPEAT, STOP_AND_WAIT, TIMEOUT, WRITE_MODE
+from lib.constants import DOWNLOADS_DIR, SELECTIVE_REPEAT
+from lib.constants import STOP_AND_WAIT, WRITE_MODE
 from lib.exceptions import ServerConnectionError
 from lib.file_controller import FileController
 from lib.message import Message
@@ -18,12 +19,17 @@ from lib.utils import get_file_name
 # TODO: pasar esto a stop and wait
 def download(client, args):
     try:
-        if not os.path.isdir("downloads"):
-            os.makedirs("downloads", exist_ok=True)
+        if not os.path.isdir(DOWNLOADS_DIR):
+            os.makedirs(DOWNLOADS_DIR, exist_ok=True)
         if args.RDTprotocol == STOP_AND_WAIT:
-            download_sw(client, args)
+            file_name = get_file_name(DOWNLOADS_DIR, args.dst)
+            file_controller = FileController.from_file_name(file_name,
+                                                            WRITE_MODE)
+            download_using_protocol(client, args, file_controller)
         elif args.RDTprotocol == SELECTIVE_REPEAT:
-            download_sr(client, args)
+            file_controller = FileController.from_args(args.dst, args.name,
+                                                       WRITE_MODE)
+            download_using_protocol(client, args, file_controller)
         else:
             logging.error("Invalid RDT protocol")
             sys.exit(1)
@@ -36,33 +42,9 @@ def download(client, args):
         sys.exit(1)
 
 
-def download_sr(client, args):
-    file_name = get_file_name("downloads", args.dst)
-    file_controller = FileController.from_file_name(file_name, WRITE_MODE)
+def download_using_protocol(client, args, file_controller):
     msg_to_send = Message(Command.DOWNLOAD, NO_FLAGS, 0, args.name, b"")
-    client.send(msg_to_send.encode())
-    client.socket.settimeout(TIMEOUT)  # in case that HI_ACK is lost
-    encoded_messge = None
-    try:
-        encoded_messge, _ = client.receive()
-    except socket.timeout:
-        logging.error("Connection error: HI_ACK not received")
-        raise ServerConnectionError
-    client.socket.settimeout(None)
-    msg = Message.decode(encoded_messge)
-    logging.info(f"Downloading file : {args.name}")
-    while msg.flags != CLOSE.encoded:
-        client.protocol.receive(msg, args.port, file_controller)
-        encoded_messge, _ = client.receive()
-        msg = Message.decode(encoded_messge)
-    logging.info("Finished download")
-    client.send(Message.close_ack_msg(Command.DOWNLOAD))
-    file_controller.close()
-
-
-def download_sw(client, args):
-    file_controller = FileController.from_args(args.dst, args.name, WRITE_MODE)
-    msg_to_send = Message(Command.DOWNLOAD, NO_FLAGS, 0, args.name, b"")
+    # TODO usar el de message
     client.send(msg_to_send.encode())
     encoded_messge = None
     try:
@@ -72,7 +54,7 @@ def download_sw(client, args):
         raise ServerConnectionError
     client.socket.settimeout(None)
     message = Message.decode(encoded_messge)
-    while message.flags != CLOSE.encoded:  # TODO se esta perdiendo el close
+    while message.flags != CLOSE.encoded:  # TODO se esta perdiendo el close?
         client.protocol.receive(message, LOCAL_PORT, file_controller)
         encoded_messge, _ = client.receive()
         message = Message.decode(encoded_messge)
