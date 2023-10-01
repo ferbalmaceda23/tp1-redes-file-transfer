@@ -29,8 +29,9 @@ class SelectiveRepeatProtocol:
         self.thread_pool = {}
         self.acks_received = 0
 
-    # receive ACKs from client
+    # receive ACKs in server from client
     def receive_acks_from_queue(self, client_queue: Queue):
+        """
         while True:
             try:
                 maybe_ack = client_queue.get(block=True)
@@ -50,8 +51,34 @@ class SelectiveRepeatProtocol:
             except Exception as e:
                 logging.error("Error receiving ack: %s", e)
                 print("Error receiving acks!")
+        """
+        continue_receiving = True
+        while continue_receiving:
+            try:
+                maybe_ack = client_queue.get(block=True)
+                msg_received = Message.decode(maybe_ack)
+                if msg_received.flags == ACK.encoded:
+                    print(f"Received ACK: {msg_received.ack_number}")
+                    self.join_ack_thread(msg_received)
+                    self.not_acknowledged_lock.acquire()
+                    if self.not_acknowledged > 0:
+                        self.not_acknowledged -= 1
+                    self.not_acknowledged_lock.release()
+                    self.acks_received += 1
+                    log_received_msg(msg_received, LOCAL_PORT)
+                    if msg_received.ack_number == self.send_base:
+                        print("Moving send window. Current send base:", self.send_base)
+                        self.move_send_window()
+                    else:
+                        logging.debug(f"Received messy ACK: {msg_received.ack_number}")
+                    continue_receiving = self.acks_received <= self.max_sqn
+            except socket.timeout:
+                logging.error("Timeout on thread ack")
+            except Exception as e:
+                logging.error(f"Error receiving acks: {e}")
+        self.socket.sendto(Message.close_msg(Command.DOWNLOAD), (LOCAL_HOST, LOCAL_PORT))
 
-    # Receives acks from server
+    # Receives acks in client from server
     def receive_acks(self):
         continue_receiving = True
         while continue_receiving:
@@ -77,7 +104,7 @@ class SelectiveRepeatProtocol:
                 logging.error("Timeout on thread ack")
             except Exception as e:
                 logging.error(f"Error receiving acks: {e}")
-        self.socket.sendto(Message.close_msg(Command.UPLOAD), (LOCAL_HOST, LOCAL_PORT))  # TODO recibir comando por parametro?
+        self.socket.sendto(Message.close_msg(Command.UPLOAD), (LOCAL_HOST, LOCAL_PORT))
 
         
     def join_ack_thread(self, msg_received):
