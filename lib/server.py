@@ -220,6 +220,8 @@ class Server:
             self.protocol.receive(msg, client_port, file_controller)
             msg = self.dequeue_encoded_msg(client_msg_queue)
         logging.info(f"File {file_name} uploaded, closing connection")
+        self.socket.sendto(Message.close_ack_msg(Command.UPLOAD),
+                           (LOCAL_HOST, client_port)) #TODO Q HACEMOS SI NUUUNCA LO RECIBE AL CLOSE?
         file_controller.close()
 
     def dequeue_encoded_msg(self, client_msg_queue):

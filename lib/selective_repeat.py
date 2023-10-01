@@ -2,12 +2,12 @@ import logging
 import socket
 from threading import Thread, Lock
 from lib.commands import Command
-from lib.constants import DATA_SIZE, LOCAL_HOST, TIMEOUT
+from lib.constants import DATA_SIZE, LOCAL_HOST, MAX_TIMEOUT_RETRIES, TIMEOUT
 from lib.constants import LOCAL_PORT, READ_MODE, SELECTIVE_REPEAT
 from lib.constants import MAX_WINDOW_SIZE, MAX_ACK_RESEND_TRIES
 from lib.exceptions import WindowFullError
 from lib.file_controller import FileController
-from lib.flags import ACK, NO_FLAGS
+from lib.flags import ACK, CLOSE_ACK, NO_FLAGS
 from lib.message_utils import receive_encoded_from_socket, send_ack, send_close
 from lib.log import log_received_msg, log_sent_msg
 from lib.message import Message
@@ -32,14 +32,11 @@ class SelectiveRepeatProtocol:
     # Receives acks in client from server
     def receive_acks(self, msq_queue=None, client_port=LOCAL_PORT):
         continue_receiving = True
+        tries = 0
         while continue_receiving:
             try:
                 maybe_ack = None
-                if msq_queue:
-                    maybe_ack = msq_queue.get(block=True, timeout=1.5)
-                    # TODO ajustar TO o hacer cte
-                else:
-                    maybe_ack = receive_encoded_from_socket(self.socket)
+                maybe_ack = self.receive_msg(msq_queue)
                 msg_received = Message.decode(maybe_ack)
                 if msg_received.flags == ACK.encoded:
                     ack_number = msg_received.ack_number
@@ -57,10 +54,34 @@ class SelectiveRepeatProtocol:
                     continue_receiving = self.acks_received <= self.max_sqn
             except socket.timeout or Empty:
                 logging.error("Timeout on main thread ack")
+                tries += 1
+                if tries == MAX_ACK_RESEND_TRIES:
+                    logging.error("Max tries reached for main ACK thread")
+                    for thread in self.thread_pool.values():
+                        thread.join()
+                    continue_receiving = False
             except Exception as e:
                 logging.error(f"Error receiving acks: {e}")
         logging.debug("Sending close msg")
-        send_close(self.socket, Command.UPLOAD, (LOCAL_HOST, client_port))
+        close_tries = 0
+        while close_tries < MAX_TIMEOUT_RETRIES:
+            try:
+                send_close(self.socket, Command.UPLOAD,
+                           (LOCAL_HOST, client_port))
+                maybe_close_ack = self.receive_msg(msq_queue)
+                if Message.decode(maybe_close_ack).flags == CLOSE_ACK.encoded:
+                    logging.debug("Received close ACK")
+                break
+            except socket.timeout or Empty:
+                close_tries += 1
+
+    def receive_msg(self, msq_queue):
+        if msq_queue:
+            maybe_ack = msq_queue.get(block=True, timeout=1.5)
+                    # TODO ajustar TO o hacer cte
+        else:
+            maybe_ack = receive_encoded_from_socket(self.socket)
+        return maybe_ack
 
     def is_base_ack(self, ack_number):
         return ack_number == self.send_base
@@ -212,8 +233,11 @@ class SelectiveRepeatProtocol:
             data = f_controller.read()
             file_size -= data_length
 
-        ack_thread.join()
+        ack_thread.join(timeout=10)
+        print("Closing connection to clien 11efdt")
+
         f_controller.close()
+        print("Closing connection to client")
 
     def move_rcv_window(self, shift):
         self.rcv_base += shift
