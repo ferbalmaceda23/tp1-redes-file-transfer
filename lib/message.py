@@ -1,5 +1,5 @@
 import logging
-from lib.flags import ACK, CLOSE, HI, HI_ACK, NO_FLAGS, ERROR, Flag
+from lib.flags import ACK, CLOSE, CLOSE_ACK, HI, HI_ACK, NO_FLAGS, ERROR, Flag
 from lib.commands import Command
 from lib.constants import BUFFER_SIZE, EMPTY_DATA, EMPTY_FILE
 
@@ -117,6 +117,9 @@ class Message:
         msg = Message(Command.DOWNLOAD, NO_FLAGS, EMPTY_FILE,
                       file_name, EMPTY_DATA)
         return msg.encode()
+
+    def close_ack_msg(command):
+        return Message(command, CLOSE_ACK, EMPTY_FILE, "", EMPTY_DATA).encode()
 
     @classmethod
     def error_msg(cls, command, error_msg):

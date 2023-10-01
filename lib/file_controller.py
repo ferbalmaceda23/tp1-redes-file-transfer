@@ -42,6 +42,6 @@ class FileController():
 
     def get_file_size(self):
         return os.path.getsize(self.src)
-    
+
     def close(self):
         self.file.close()

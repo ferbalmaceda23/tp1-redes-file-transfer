@@ -1,6 +1,5 @@
 import logging
 import socket
-from lib.commands import Command
 from lib.exceptions import ServerConnectionError
 from lib.flags import HI_ACK
 from lib.constants import BUFFER_SIZE, TIMEOUT, MAX_TIMEOUT_RETRIES
@@ -29,13 +28,10 @@ class Client:
                 print("Received server response")
                 maybe_hi_ack = Message.decode(enconded_message)
                 break
-                
+
             except ValueError as e:
-                # Manejo específico para la excepción ValueError
                 print(f"Error de valor: {e}")
             except TypeError as e:
-                # Manejo específico para la excepción TypeError
-                # (nunca se ejecutará en este caso)
                 print(f"Error de tipo: {e}")
             # except Exception as e:
             #     logging.error(f"Server is offline: {e}")
@@ -52,7 +48,7 @@ class Client:
         if maybe_hi_ack.flags == HI_ACK.encoded:
             self.send(Message.hi_ack_msg(command))
             logging.info("Connected to server")
-            
+
         action()
 
     def send_hi_to_server(self, command, protocol):

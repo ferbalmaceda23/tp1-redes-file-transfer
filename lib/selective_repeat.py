@@ -28,44 +28,18 @@ class SelectiveRepeatProtocol:
         self.acks_map = {}
         self.thread_pool = {}
         self.acks_received = 0
-        #self.max_sqn = 16
-
-    # receive ACKs in server from client
-    def receive_acks_from_queue(self, client_queue: Queue, client_port):
-        continue_receiving = True
-        while continue_receiving:
-            try:
-                maybe_ack = client_queue.get(block=True, timeout=1.5)
-                msg_received = Message.decode(maybe_ack)
-                if msg_received.flags == ACK.encoded:
-                    print(f"Received ACK: {msg_received.ack_number}")
-                    self.join_ack_thread(msg_received)
-                    self.not_acknowledged_lock.acquire()
-                    if self.not_acknowledged > 0:
-                        self.not_acknowledged -= 1
-                    self.not_acknowledged_lock.release()
-                    self.acks_received += 1
-                    log_received_msg(msg_received, LOCAL_PORT)
-                    if msg_received.ack_number == self.send_base:
-                        print("Moving send window. Current send base:", self.send_base)
-                        self.move_send_window()
-                    else:
-                        logging.debug(f"Received messy ACK: {msg_received.ack_number}")
-                    continue_receiving = self.acks_received <= self.max_sqn
-                    print("continue receiving", continue_receiving)
-            except Empty:
-                logging.error("Timeout on thread ack")
-            except Exception as e:
-                logging.error(f"Error receiving acks: {e}")
-        logging.debug("Sending close msg")
-        send_close(self.socket, Command.DOWNLOAD, (LOCAL_HOST, client_port))
 
     # Receives acks in client from server
-    def receive_acks(self, msq_queue=None):
+    def receive_acks(self, msq_queue=None, client_port=LOCAL_PORT):
         continue_receiving = True
         while continue_receiving:
             try:
-                maybe_ack = receive_encoded_from_socket(self.socket)
+                maybe_ack = None
+                if msq_queue:
+                    maybe_ack = msq_queue.get(block=True, timeout=1.5)
+                    # TODO ajustar TO o hacer cte
+                else:
+                    maybe_ack = receive_encoded_from_socket(self.socket)
                 msg_received = Message.decode(maybe_ack)
                 if msg_received.flags == ACK.encoded:
                     ack_number = msg_received.ack_number
@@ -73,7 +47,7 @@ class SelectiveRepeatProtocol:
                     self.join_ack_thread(msg_received)
                     self.modify_not_acknowledged(-1)
                     self.acks_received += 1
-                    log_received_msg(msg_received, LOCAL_PORT)
+                    log_received_msg(msg_received, client_port)
                     if self.is_base_ack(ack_number):
                         print("Moving send window."
                               + f"Current send base: {self.send_base}")
@@ -81,12 +55,12 @@ class SelectiveRepeatProtocol:
                     else:
                         logging.debug(f"Received messy ACK: {ack_number}")
                     continue_receiving = self.acks_received <= self.max_sqn
-            except socket.timeout:
+            except socket.timeout or Empty:
                 logging.error("Timeout on main thread ack")
             except Exception as e:
                 logging.error(f"Error receiving acks: {e}")
         logging.debug("Sending close msg")
-        send_close(self.socket, Command.UPLOAD, (LOCAL_HOST, LOCAL_PORT))
+        send_close(self.socket, Command.UPLOAD, (LOCAL_HOST, client_port))
 
     def is_base_ack(self, ack_number):
         return ack_number == self.send_base
@@ -129,24 +103,27 @@ class SelectiveRepeatProtocol:
         self.write_to_file(file_controller, decoded_msg)
         log_received_msg(decoded_msg, port)
         self.process_buffer(file_controller)
-        logging.debug(f"Sending ACK: {decoded_msg.seq_number}")
-        send_ack(decoded_msg.command, port, decoded_msg.seq_number, self.socket)
+        seq_num = decoded_msg.seq_number
+        logging.debug(f"Sending ACK: {seq_num}")
+        send_ack(decoded_msg.command, port, seq_num, self.socket)
         self.seq_num += 1
 
     def already_acknowledged(self, decoded_msg):
         return decoded_msg.seq_number < self.rcv_base
 
     def send_duplicated_ack(self, decoded_msg, port):
-        logging.debug(f"Message was already acked: {decoded_msg.seq_number}")
-        send_ack(decoded_msg.command, port, decoded_msg.seq_number, self.socket)
+        seq_num = decoded_msg.seq_number
+        logging.debug(f"Message was already acked: {seq_num}")
+        send_ack(decoded_msg.command, port, seq_num, self.socket)
 
     def buffer_packet(self, decoded_msg, port):
         log_received_msg(decoded_msg, port)
-        logging.debug(f"Received msg: {decoded_msg.seq_number}")
+        seq_num = decoded_msg.seq_number
+        logging.debug(f"Received msg: {seq_num}")
         if self.ack_is_not_repeated(decoded_msg):
             self.buffer.append(decoded_msg)
-        logging.debug(f"Sending ACK: {decoded_msg.seq_number}")
-        send_ack(decoded_msg.command, port, decoded_msg.seq_number, self.socket)
+        logging.debug(f"Sending ACK: {seq_num}")
+        send_ack(decoded_msg.command, port, seq_num, self.socket)
 
     def ack_is_not_repeated(self, decoded_msg):
         unique_sqns = [x.seq_number for x in self.buffer]
@@ -272,7 +249,7 @@ class SelectiveRepeatProtocol:
                         logging.debug(f"Sending msg back to server: {msg}")
                         self.socket.sendto(encoded_msg, (LOCAL_HOST, port))
                     except Exception as e:
-                        logging.error("Error sending msg back to server: %s", e)
+                        logging.error(f"Error sending msg back to server: {e}")
                     tries += 1
 
     def send_error(self, command, port, error_msg):

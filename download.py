@@ -1,6 +1,6 @@
 import socket
 from lib.commands import Command
-from lib.constants import BUFFER_SIZE, SELECTIVE_REPEAT, STOP_AND_WAIT, TIMEOUT, WRITE_MODE
+from lib.constants import SELECTIVE_REPEAT, STOP_AND_WAIT, TIMEOUT, WRITE_MODE
 from lib.exceptions import ServerConnectionError
 from lib.file_controller import FileController
 from lib.message import Message
@@ -8,7 +8,7 @@ from lib.log import prepare_logging
 from lib.constants import LOCAL_PORT
 from lib.client import Client
 from lib.args_parser import parse_args_download
-from lib.flags import CLOSE, CLOSE_ACK, NO_FLAGS
+from lib.flags import CLOSE, NO_FLAGS
 import sys
 import logging
 import os
@@ -35,6 +35,7 @@ def download(client, args):
         logging.error(f"An error occurred: {e}")
         sys.exit(1)
 
+
 def download_sr(client, args):
     file_name = get_file_name("downloads", args.dst)
     file_controller = FileController.from_file_name(file_name, WRITE_MODE)
@@ -55,11 +56,10 @@ def download_sr(client, args):
         encoded_messge, _ = client.receive()
         msg = Message.decode(encoded_messge)
     logging.info("Finished download")
-    client.send(Message(Command.DOWNLOAD, CLOSE_ACK, 0, "", b"").encode())
+    client.send(Message.close_ack_msg(Command.DOWNLOAD))
     file_controller.close()
 
 
-################### STOP AND WAIT ###################
 def download_sw(client, args):
     file_controller = FileController.from_args(args.dst, args.name, WRITE_MODE)
     msg_to_send = Message(Command.DOWNLOAD, NO_FLAGS, 0, args.name, b"")
@@ -72,11 +72,11 @@ def download_sw(client, args):
         raise ServerConnectionError
     client.socket.settimeout(None)
     message = Message.decode(encoded_messge)
-    while message.flags != CLOSE.encoded:  # se esta perdiendo el close
+    while message.flags != CLOSE.encoded:  # TODO se esta perdiendo el close
         client.protocol.receive(message, LOCAL_PORT, file_controller)
         encoded_messge, _ = client.receive()
         message = Message.decode(encoded_messge)
-    client.send(Message(Command.DOWNLOAD, CLOSE_ACK, 0, "", b"").encode())
+    client.send(Message.close_ack_msg(Command.DOWNLOAD))
     logging.info("Finished download")
     file_controller.close()
 
@@ -91,6 +91,5 @@ if __name__ == "__main__":
         logging.info("\nExiting...")
         sys.exit(0)
     except Exception as e:
-        raise e
         logging.error(f"An error occurred: {e}")
         sys.exit(1)
