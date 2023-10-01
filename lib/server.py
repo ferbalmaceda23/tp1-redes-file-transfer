@@ -5,7 +5,7 @@ from lib.exceptions import DuplicatedACKError
 from lib.file_controller import FileController
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
-from lib.constants import READ_MODE, BUFFER_SIZE, TIMEOUT
+from lib.constants import DATA_SIZE, READ_MODE, BUFFER_SIZE, TIMEOUT
 from lib.constants import WRITE_MODE, DEFAULT_FOLDER, ERROR_EXISTING_FILE
 from lib.flags import HI, HI_ACK, CLOSE
 from lib.commands import Command
@@ -50,7 +50,8 @@ class Server:
                 self.clients[client_port] = client_msg_queue
                 args = (encoded_message, client_address, client_msg_queue)
                 try:
-                    client = Thread(target=self.handle_client_message, args=args)
+                    client = Thread(target=self.handle_client_message, 
+                                    args=args)
                     client.start()
                 #    client.join()
                 except Exception as e:
@@ -147,8 +148,9 @@ class Server:
 
         if type(self.protocol) == SelectiveRepeatProtocol:
             Thread(
-                target=self.protocol.receive_acks_from_queue, args=(msg_queue)
+                target=self.protocol.receive_acks_from_queue, args=(msg_queue,)
             ).start()
+            self.protocol.set_window_size(int(file_size / DATA_SIZE))
             while file_size > 0:
                 self.protocol.send(command, client_port, data, file_controller)
                 file_size -= len(data)

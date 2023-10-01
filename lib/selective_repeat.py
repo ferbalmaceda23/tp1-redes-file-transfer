@@ -28,6 +28,7 @@ class SelectiveRepeatProtocol:
         self.acks_map = {}
         self.thread_pool = {}
         self.acks_received = 0
+        #self.max_sqn = 16
 
     # receive ACKs in server from client
     def receive_acks_from_queue(self, client_queue: Queue):
