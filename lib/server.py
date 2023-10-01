@@ -160,19 +160,6 @@ class Server:
                 file_size -= len(data)
                 data = file_controller.read()
             ack_thread.join()
-
-            retries = 0
-            while retries <= MAX_TIMEOUT_RETRIES:
-                try:
-                    msg = msg_queue.get(block=True, timeout=1.5)
-                    if Message.decode(msg).flags == CLOSE_ACK.encoded:
-                        break
-                except Empty:
-                    logging.error("Timeout! Retrying to send CLOSE...")
-                    client_address = (LOCAL_HOST, client_port)
-                    close_msg = Message.close_msg(Command.DOWNLOAD)
-                    self.socket.sendto(close_msg, client_address)
-                    retries += 1
             file_controller.close()
             logging.info(f"Closing connection to client {client_port}")
         else:
@@ -195,21 +182,20 @@ class Server:
                     continue
                 data = file_controller.read()
                 file_size -= data_length
-
-        send_close(self.socket, command, client_address)
-        retries = 0
-        while retries <= MAX_TIMEOUT_RETRIES:
-            try:
-                msg = msg_queue.get(block=True, timeout=1.5)
-                if Message.decode(msg).flags == CLOSE_ACK.encoded:
-                    break
-            except Empty:
-                logging.error("Timeout! Retrying to send CLOSE...")
-                client_address = (LOCAL_HOST, client_port)
-                close_msg = Message.close_msg(Command.DOWNLOAD)
-                self.socket.sendto(close_msg, client_address)
-                retries += 1
-        file_controller.close()
+            send_close(self.socket, command, client_address)
+            retries = 0
+            while retries <= MAX_TIMEOUT_RETRIES:
+                try:
+                    msg = msg_queue.get(block=True, timeout=1.5)
+                    if Message.decode(msg).flags == CLOSE_ACK.encoded:
+                        break
+                except Empty:
+                    logging.error("Timeout! Retrying to send CLOSE...")
+                    client_address = (LOCAL_HOST, client_port)
+                    close_msg = Message.close_msg(Command.DOWNLOAD)
+                    self.socket.sendto(close_msg, client_address)
+                    retries += 1
+            file_controller.close()
 
     def handle_upload(self, client_port, client_msg_queue):
         msg = self.dequeue_encoded_msg(client_msg_queue)  # first upload msg
