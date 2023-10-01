@@ -50,7 +50,9 @@ class Server:
                 self.clients[client_port] = client_msg_queue
                 args = (encoded_message, client_address, client_msg_queue)
                 try:
-                    Thread(target=self.handle_client_message, args=args).start()
+                    client = Thread(target=self.handle_client_message, args=args)
+                    client.start()
+                #    client.join()
                 except Exception as e:
                     logging.error(f"Error in thread {e}")
 
@@ -173,6 +175,7 @@ class Server:
                 file_size -= data_length
 
         self.send_CLOSE(command, client_address)
+        file_controller.close()
 
     def handle_upload(self, client_port, client_msg_queue):
         msg = self.dequeue_encoded_msg(client_msg_queue)  # first upload msg
@@ -183,6 +186,8 @@ class Server:
         while msg.flags != CLOSE.encoded:
             self.protocol.receive(msg, client_port, file_controller)
             msg = self.dequeue_encoded_msg(client_msg_queue)
+        logging.info(f"File {file_name} uploaded successfully, closing connection")
+        file_controller.close()
 
     def dequeue_encoded_msg(self, client_msg_queue):
         # Sacamos el timeout de la cola porque en el upload

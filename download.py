@@ -34,6 +34,8 @@ def download_sr(client, args):
         client.protocol.receive(msg, args.port, file_controller)
         encoded_msg = client.socket.recvfrom(BUFFER_SIZE)[0]
         msg = Message.decode(encoded_msg)
+    logging.info("Finished download")
+    file_controller.close()
 
 ################### STOP AND WAIT ###################
 def download_sw(client, args):
@@ -57,6 +59,7 @@ def download_sw(client, args):
         encoded_messge, _ = client.receive()
         message = Message.decode(encoded_messge)
     logging.info("Finished download")
+    file_controller.close()
 
 
 if __name__ == "__main__":

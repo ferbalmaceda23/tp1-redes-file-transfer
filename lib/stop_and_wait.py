@@ -98,3 +98,4 @@ class StopAndWaitProtocol():
             file_size -= data_length
         self.socket.sendto(Message.close_msg(Command.UPLOAD),
                            (LOCAL_HOST, LOCAL_PORT))
+        f_controller.close()
