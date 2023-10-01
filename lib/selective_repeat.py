@@ -63,6 +63,9 @@ class SelectiveRepeatProtocol:
             except Exception as e:
                 logging.error(f"Error receiving acks: {e}")
         logging.debug("Sending close msg")
+        self.send_close_and_wait_ack(msq_queue, client_port)
+
+    def send_close_and_wait_ack(self, msq_queue, client_port):
         close_tries = 0
         while close_tries < MAX_TIMEOUT_RETRIES:
             try:
