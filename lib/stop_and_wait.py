@@ -1,4 +1,5 @@
 import logging
+from queue import Empty
 import socket
 from lib.commands import Command
 from lib.file_controller import FileController
@@ -7,7 +8,7 @@ from lib.constants import LOCAL_HOST, LOCAL_PORT, MAX_TIMEOUT_RETRIES
 from lib.constants import READ_MODE, STOP_AND_WAIT
 from lib.message import Message
 from lib.exceptions import DuplicatedACKError, TimeoutsRetriesExceeded
-from lib.message_utils import receive_encoded_from_socket, send_ack
+from lib.message_utils import receive_msg, send_ack, send_close_and_wait_ack
 from lib.log import log_received_msg, log_sent_msg
 
 
@@ -53,7 +54,7 @@ class StopAndWaitProtocol():
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
         log_sent_msg(msg, self.seq_num)
 
-    def send(self, command, port, data, file_controller, receive=None):
+    def send(self, command, port, data, file_controller, msg_queue=None):
         if self.tries_send >= MAX_TIMEOUT_RETRIES:
             print(self.tries_send)
             logging.error("Max timeout retries reached")
@@ -64,12 +65,8 @@ class StopAndWaitProtocol():
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
         log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
         try:
-            if receive:
-                msg_received = receive()
-            else:
-                encoded_message = receive_encoded_from_socket(self.socket)
-                msg_received = Message.decode(encoded_message)
-            if msg_received.ack_number <= self.seq_num:
+            encoded_message = receive_msg(msg_queue, self.socket)
+            if Message.decode(encoded_message).ack_number <= self.seq_num:
                 logging.info(f"Client {port}: received duplicated ACK")
                 raise DuplicatedACKError
             else:
@@ -78,22 +75,35 @@ class StopAndWaitProtocol():
         except socket.timeout:
             logging.error("Timeout receiving ACK message")
             raise socket.timeout
+        except Empty:
+            logging.error("Timeout receiving ACK message")
+            raise Empty
 
-    def upload(self, args):
-        f_controller = FileController.from_args(args.src, args.name, READ_MODE)
+    def upload(self, args=None, msq_queue=None,
+               client_port=LOCAL_PORT, file_path=None):
+        f_controller = None
+        command = Command.UPLOAD
+        if file_path:
+            f_controller = FileController.from_file_name(file_path, READ_MODE)
+            command = Command.DOWNLOAD
+        else:
+            f_controller = FileController.from_args(args.src,
+                                                    args.name, READ_MODE)
         data = f_controller.read()
         file_size = f_controller.get_file_size()
         while file_size > 0:
             data_length = len(data)
             try:
-                self.send(Command.UPLOAD, LOCAL_PORT, data, f_controller)
+                self.send(command, client_port, data, f_controller, msq_queue)
             except DuplicatedACKError:
                 continue
             except socket.timeout:
                 logging.error("Timeout! Retrying...")
                 continue
+            except Empty:
+                logging.error("Timeout! Retrying...")
+                continue
             data = f_controller.read()
             file_size -= data_length
-        self.socket.sendto(Message.close_msg(Command.UPLOAD),
-                           (LOCAL_HOST, LOCAL_PORT))
+        send_close_and_wait_ack(self.socket, msq_queue, client_port, command)
         f_controller.close()

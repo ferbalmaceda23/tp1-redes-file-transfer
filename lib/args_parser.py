@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from lib.constants import STOP_AND_WAIT
+from lib.constants import SELECTIVE_REPEAT, STOP_AND_WAIT
 
 
 def parse_args_upload():
@@ -156,7 +156,7 @@ def validate_args_download(parser):
         args.host = "localhost"
     if args.port is None:
         args.port = 8080
-    if args.RDTprotocol is None:
+    if args.RDTprotocol is None or args.RDTprotocol not in [STOP_AND_WAIT, SELECTIVE_REPEAT]:
         args.RDTprotocol = STOP_AND_WAIT
 
     return args

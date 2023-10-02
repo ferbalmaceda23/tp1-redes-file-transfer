@@ -23,10 +23,6 @@ def download(client, args):
         sys.exit(0)
 
     try:
-        if args.RDTprotocol not in [STOP_AND_WAIT, SELECTIVE_REPEAT]:
-            logging.error("Invalid RDT protocol")
-            sys.exit(1)
-
         if not os.path.isdir(DOWNLOADS_DIR):
             os.makedirs(DOWNLOADS_DIR, exist_ok=True)
         file_name = get_file_name(DOWNLOADS_DIR, args.dst)
@@ -54,7 +50,7 @@ def download_using_protocol(client, args, file_controller):
     try:
         encoded_messge, _ = client.receive()
     except socket.timeout:
-        logging.error("Connection error: HI_ACK not received")
+        logging.error("Connection error: HI_ACK not received") # FIXME no es por el HI_ACK solo. Puede ser q se pierda el primer download
         file_controller.delete()
         raise ServerConnectionError
 

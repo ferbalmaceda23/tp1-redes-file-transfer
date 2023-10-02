@@ -141,65 +141,11 @@ class Server:
                 self.protocol.send_error(command, client_port, ERROR_EXISTING_FILE)
                 logging.error(f"File {msg.file_name} does not exist, try again")
                 return
-            file_controller = FileController.from_file_name(file_path, READ_MODE)
-            data = file_controller.read()
-            file_size = file_controller.get_file_size()
 
-            if type(self.protocol) == SelectiveRepeatProtocol:
-                self.protocol.upload(msq_queue=msg_queue,
-                                     client_port=client_port,
-                                     file_path=file_path)
-                # args = (msg_queue, client_port,)
-                # ack_thread = Thread(
-                #     target=self.protocol.receive_acks, args=args
-                # )
-                # ack_thread.start()
-                # self.protocol.set_window_size(int(file_size / DATA_SIZE))
-                # while file_size > 0:
-                #     try:
-                #         self.protocol.send(command, client_port,
-                #                         data, file_controller)
-                #     except WindowFullError:
-                #         continue
-                #     file_size -= len(data)
-                #     data = file_controller.read()
-                # ack_thread.join()
-                # file_controller.close()
-                # logging.info(f"Closing connection to client {client_port}")
-            else:
-                while file_size > 0:
-                    data_length = len(data)
-                    try:
-                        self.protocol.send(
-                            Command.DOWNLOAD,
-                            client_port,
-                            data,
-                            file_controller,
-                            lambda: self.dequeue_decoded_msg_download(msg_queue),
-                        )
-                    except DuplicatedACKError:
-                        logging.error("Duplicated ACK! Retrying...")
-                        continue
-                    except Empty:
-                        logging.error("Timeout! Retrying...")
-                        print("Timeout!")
-                        continue
-                    data = file_controller.read()
-                    file_size -= data_length
-                send_close(self.socket, command, client_address)
-                retries = 0
-                while retries < MAX_TIMEOUT_RETRIES:
-                    try:
-                        msg = msg_queue.get(block=True, timeout=1.5)
-                        if Message.decode(msg).flags == CLOSE_ACK.encoded:
-                            break
-                    except Empty:
-                        logging.error("Timeout! Retrying to send CLOSE...")
-                        client_address = (LOCAL_HOST, client_port)
-                        close_msg = Message.close_msg(Command.DOWNLOAD)
-                        self.socket.sendto(close_msg, client_address)
-                        retries += 1
-                file_controller.close()
+            self.protocol.upload(msq_queue=msg_queue,
+                                 client_port=client_port,
+                                 file_path=file_path)
+
 
     def send_file_list(self, client_address):
         files = os.listdir(self.storage)

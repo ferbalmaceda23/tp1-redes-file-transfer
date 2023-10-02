@@ -95,7 +95,7 @@ class SelectiveRepeatProtocol:
     def receive_msg(self, msq_queue):
         if msq_queue:
             maybe_ack = msq_queue.get(block=True, timeout=1.5)
-            # TODO ajustar TO o hacer cte
+            # TODO ajustar TO o hacer cte para usar el de utils
         else:
             maybe_ack = receive_encoded_from_socket(self.socket)
         return maybe_ack
