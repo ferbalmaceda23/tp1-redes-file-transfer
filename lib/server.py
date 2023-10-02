@@ -146,23 +146,26 @@ class Server:
             file_size = file_controller.get_file_size()
 
             if type(self.protocol) == SelectiveRepeatProtocol:
-                args = (msg_queue, client_port,)
-                ack_thread = Thread(
-                    target=self.protocol.receive_acks, args=args
-                )
-                ack_thread.start()
-                self.protocol.set_window_size(int(file_size / DATA_SIZE))
-                while file_size > 0:
-                    try:
-                        self.protocol.send(command, client_port,
-                                        data, file_controller)
-                    except WindowFullError:
-                        continue
-                    file_size -= len(data)
-                    data = file_controller.read()
-                ack_thread.join()
-                file_controller.close()
-                logging.info(f"Closing connection to client {client_port}")
+                self.protocol.upload(msq_queue=msg_queue,
+                                     client_port=client_port,
+                                     file_path=file_path)
+                # args = (msg_queue, client_port,)
+                # ack_thread = Thread(
+                #     target=self.protocol.receive_acks, args=args
+                # )
+                # ack_thread.start()
+                # self.protocol.set_window_size(int(file_size / DATA_SIZE))
+                # while file_size > 0:
+                #     try:
+                #         self.protocol.send(command, client_port,
+                #                         data, file_controller)
+                #     except WindowFullError:
+                #         continue
+                #     file_size -= len(data)
+                #     data = file_controller.read()
+                # ack_thread.join()
+                # file_controller.close()
+                # logging.info(f"Closing connection to client {client_port}")
             else:
                 while file_size > 0:
                     data_length = len(data)

@@ -30,7 +30,7 @@ class SelectiveRepeatProtocol:
         self.acks_received = 0
 
     # Receives acks in client from server
-    def receive_acks(self, msq_queue=None, client_port=LOCAL_PORT):
+    def receive_acks(self, msq_queue, client_port, command):
         continue_receiving = True
         tries = 0
         while continue_receiving:
@@ -61,7 +61,7 @@ class SelectiveRepeatProtocol:
             except Exception as e:
                 logging.error(f"Error receiving acks: {e}")
         logging.debug("Sending close msg")
-        self.send_close_and_wait_ack(msq_queue, client_port)
+        self.send_close_and_wait_ack(msq_queue, client_port, command)
 
     def receive_ack_and_join_ack_thread(self, client_port, msg_received):
         ack_number = msg_received.ack_number
@@ -77,11 +77,11 @@ class SelectiveRepeatProtocol:
         else:
             logging.debug(f"Received messy ACK: {ack_number}")
 
-    def send_close_and_wait_ack(self, msq_queue, client_port):
+    def send_close_and_wait_ack(self, msq_queue, client_port, command):
         close_tries = 0
         while close_tries < MAX_TIMEOUT_RETRIES:
             try:
-                send_close(self.socket, Command.UPLOAD,
+                send_close(self.socket, command,
                            (LOCAL_HOST, client_port))
                 maybe_close_ack = self.receive_msg(msq_queue)
                 if Message.decode(maybe_close_ack).flags == CLOSE_ACK.encoded:
@@ -233,28 +233,34 @@ class SelectiveRepeatProtocol:
             self.not_acknowledged += amount
         self.not_acknowledged_lock.release()
 
-    def upload(self, args):
-        f_controller = FileController.from_args(args.src, args.name, READ_MODE)
+    def upload(self, args=None, msq_queue=None,
+               client_port=LOCAL_PORT, file_path=None):
+        f_controller = None
+        command = Command.UPLOAD
+        if file_path:
+            f_controller = FileController.from_file_name(file_path, READ_MODE)
+            command = Command.DOWNLOAD
+        else:
+            f_controller = FileController.from_args(args.src,
+                                                    args.name, READ_MODE)
         file_size = f_controller.get_file_size()
         self.set_window_size(int(file_size / DATA_SIZE))
         data = f_controller.read()
-        ack_thread = Thread(target=self.receive_acks)
+        ack_thread = Thread(target=self.receive_acks,
+                            args=(msq_queue, client_port, command))
         ack_thread.start()
 
         while file_size > 0:
             data_length = len(data)
             try:
-                self.send(Command.UPLOAD, LOCAL_PORT, data, f_controller)
+                self.send(command, client_port, data, f_controller)
             except WindowFullError:
                 continue
             data = f_controller.read()
             file_size -= data_length
 
-        ack_thread.join(timeout=10)
-        print("joined ack thread")
-
+        ack_thread.join(timeout=10)  # TODO revisar
         f_controller.close()
-        print("closed file")
 
     def move_rcv_window(self, shift):
         self.rcv_base += shift
