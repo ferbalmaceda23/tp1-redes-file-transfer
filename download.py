@@ -6,7 +6,7 @@ from lib.message import Message
 from lib.log import prepare_logging
 from lib.client import Client
 from lib.args_parser import parse_args_download
-from lib.flags import LIST
+from lib.flags import ERROR, LIST
 import sys
 import logging
 import os
@@ -55,6 +55,11 @@ def download_using_protocol(client, args):
         logging.error("Connection error: "
                       + "HI_ACK or first DOWNLOAD not received")
         raise ServerConnectionError
+
+    decoded_msg = Message.decode(encoded_messge)
+    if decoded_msg.flags == ERROR.encoded:
+        logging.error(decoded_msg.data)
+        sys.exit(1)
 
     file_name = get_file_name(DOWNLOADS_DIR, args.dst)
     client.protocol.receive_file(first_encoded_msg=encoded_messge,

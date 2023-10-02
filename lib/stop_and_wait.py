@@ -50,11 +50,6 @@ class StopAndWaitProtocol():
             send_ack(decoded_msg.command, port, self.ack_num, self.socket)
             self.ack_num += 1
 
-    def send_error(self, command, port, error_msg):
-        msg = Message.error_msg(command, error_msg)
-        self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
-        log_sent_msg(msg, self.seq_num)
-
     def send(self, command, port, data, file_controller, msg_queue=None):
         if self.tries_send >= MAX_TIMEOUT_RETRIES:
             logging.error("Max timeout retries reached")

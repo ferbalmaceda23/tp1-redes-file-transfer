@@ -10,7 +10,7 @@ from lib.flags import HI, HI_ACK, LIST
 from lib.commands import Command
 from lib.message import Message
 from lib.utils import get_file_name, select_protocol
-from lib.message_utils import send_close, send_close_and_wait_ack
+from lib.message_utils import send_close, send_error
 
 
 class Server:
@@ -114,12 +114,12 @@ class Server:
         elif decoded_msg.command == Command.UPLOAD:
             self.handle_upload(client_port, client_msg_queue)
         else:
-            logging.info(
+            logging.error(
                 f"Client {client_port}: unknown command "
                 + "closing connection"
             )
             self.close_client_connection(client_port)
-            send_close(self.socket, decoded_msg.command, client_address)  # TODO mandar un error
+            send_close(self.socket, decoded_msg.command, client_address)
 
     def send_hi_ack(self, client_address, decoded_msg):
         hi_ack = Message.hi_ack_msg(decoded_msg.command)
@@ -135,8 +135,8 @@ class Server:
         else:
             file_path = os.path.join(self.storage, msg.file_name)
             if not os.path.exists(file_path):
-                self.protocol.send_error(command, client_port,
-                                         ERROR_EXISTING_FILE)
+                send_error(self.socket, command, client_port,
+                           ERROR_EXISTING_FILE)
                 logging.error(f"File {msg.file_name} doesn't exist, try again")
                 return
 

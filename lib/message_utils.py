@@ -23,6 +23,11 @@ def send_close(socket, command, client_address):
     socket.sendto(Message.close_msg(command), client_address)
 
 
+def send_error(socket, command, port, error_msg):
+    encoded_msg = Message.error_msg(command, error_msg)
+    socket.sendto(encoded_msg, (LOCAL_HOST, port))
+
+
 def send_close_and_wait_ack(socket_, msq_queue, client_port, command):
     close_tries = 0
     while close_tries < MAX_TIMEOUT_RETRIES:

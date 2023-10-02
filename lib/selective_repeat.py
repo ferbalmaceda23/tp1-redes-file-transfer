@@ -281,11 +281,6 @@ class SelectiveRepeatProtocol:
                         logging.error(f"Error sending msg back to server: {e}")
                     tries += 1
 
-    def send_error(self, command, port, error_msg):
-        encoded_msg = Message.error_msg(command, error_msg)
-        self.socket.sendto(encoded_msg, (LOCAL_HOST, port))
-        log_sent_msg(Message.decode(encoded_msg), self.seq_num)
-
     def receive_file(self, first_encoded_msg,
                      file_path, client_port=LOCAL_PORT, msg_queue=None):
         f_controller = FileController.from_file_name(file_path, WRITE_MODE)
