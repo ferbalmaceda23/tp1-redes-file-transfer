@@ -103,6 +103,8 @@ class StopAndWaitProtocol():
             except Empty:
                 logging.error("Timeout! Retrying...")
                 continue
+            except TimeoutsRetriesExceeded:
+                raise TimeoutsRetriesExceeded
             data = f_controller.read()
             file_size -= data_length
         send_close_and_wait_ack(self.socket, msq_queue, client_port, command)
