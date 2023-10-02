@@ -1,8 +1,7 @@
 import logging
 import os
-from queue import Queue, Empty
-from lib.exceptions import DuplicatedACKError, TimeoutsRetriesExceeded, WindowFullError
-from lib.file_controller import FileController
+from queue import Queue
+from lib.exceptions import TimeoutsRetriesExceeded
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
 from lib.constants import BUFFER_SIZE, TIMEOUT
@@ -11,7 +10,7 @@ from lib.flags import HI, HI_ACK, LIST
 from lib.commands import Command
 from lib.message import Message
 from lib.utils import get_file_name, select_protocol
-from lib.message_utils import send_close
+from lib.message_utils import send_close, send_close_and_wait_ack
 
 
 class Server:
@@ -142,13 +141,17 @@ class Server:
                 return
 
             try:
-                self.protocol.upload(msq_queue=msg_queue,
-                                     client_port=client_port,
-                                     file_path=file_path)
+                self.protocol.send_file(msq_queue=msg_queue,
+                                        client_port=client_port,
+                                        file_path=file_path)
+                send_close_and_wait_ack(socket_=self.socket,
+                                        msq_queue=msg_queue,
+                                        client_port=client_port,
+                                        command=Command.DOWNLOAD)
+                self.close_client_connection(client_address)
             except TimeoutsRetriesExceeded:
                 logging.error("Timeouts retries exceeded")
                 self.close_client_connection(client_address)
-
 
     def send_file_list(self, client_address):
         files = os.listdir(self.storage)
@@ -159,12 +162,11 @@ class Server:
 
     def handle_upload(self, client_port, client_msg_queue):
         msg = client_msg_queue.get(block=True)  # first upload msg
-        file_name = get_file_name(self.storage, msg.file_name)
+        file_name = get_file_name(self.storage, Message.decode(msg).file_name)
         logging.info(f"Uploading file to: {file_name}")
-        self.protocol.download(first_encoded_msg=msg,
-                               client_port=client_port,
-                               file_path=file_name,
-                               command=Command.UPLOAD)
+        self.protocol.receive_file(first_encoded_msg=msg,
+                                   client_port=client_port,
+                                   file_path=file_name)
         logging.info(f"File {file_name} uploaded, closing connection")
 
     def dequeue_decoded_msg(self, client_msg_queue):

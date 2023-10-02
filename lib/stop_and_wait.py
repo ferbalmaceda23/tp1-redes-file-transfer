@@ -4,12 +4,12 @@ import socket
 from lib.commands import Command
 from lib.file_controller import FileController
 from lib.flags import CLOSE, NO_FLAGS
-from lib.constants import LOCAL_HOST, LOCAL_PORT
+from lib.constants import LOCAL_HOST, LOCAL_PORT, TIMEOUT
 from lib.constants import MAX_TIMEOUT_RETRIES, WRITE_MODE
 from lib.constants import READ_MODE, STOP_AND_WAIT
 from lib.message import Message
 from lib.exceptions import DuplicatedACKError, TimeoutsRetriesExceeded
-from lib.message_utils import receive_msg, send_ack, send_close_and_wait_ack
+from lib.message_utils import receive_msg, send_ack
 from lib.log import log_received_msg, log_sent_msg
 
 
@@ -48,6 +48,7 @@ class StopAndWaitProtocol():
             file_controller.write_file(decoded_msg.data)
             log_received_msg(decoded_msg, port)
             send_ack(decoded_msg.command, port, self.ack_num, self.socket)
+            print("Enviado ACK")
             self.ack_num += 1
 
     def send_error(self, command, port, error_msg):
@@ -57,7 +58,6 @@ class StopAndWaitProtocol():
 
     def send(self, command, port, data, file_controller, msg_queue=None):
         if self.tries_send >= MAX_TIMEOUT_RETRIES:
-            print(self.tries_send)
             logging.error("Max timeout retries reached")
             raise TimeoutsRetriesExceeded
         self.tries_send += 1
@@ -65,8 +65,11 @@ class StopAndWaitProtocol():
                       file_controller.file_name, data, self.seq_num, 0)
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
         log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
+        timeout = None
+        if msg_queue:
+            timeout = TIMEOUT
         try:
-            encoded_message = receive_msg(msg_queue, self.socket)
+            encoded_message = receive_msg(msg_queue, self.socket, timeout)
             if Message.decode(encoded_message).ack_number <= self.seq_num:
                 logging.info(f"Client {port}: received duplicated ACK")
                 raise DuplicatedACKError
@@ -80,8 +83,8 @@ class StopAndWaitProtocol():
             logging.error("Timeout receiving ACK message")
             raise Empty
 
-    def upload(self, args=None, msq_queue=None,
-               client_port=LOCAL_PORT, file_path=None):
+    def send_file(self, args=None, msq_queue=None,
+                  client_port=LOCAL_PORT, file_path=None):
         f_controller = None
         command = Command.UPLOAD
         if file_path:
@@ -102,17 +105,16 @@ class StopAndWaitProtocol():
                 logging.error("Timeout! Retrying...")
                 continue
             except Empty:
-                logging.error("Timeout! Retrying...")
+                logging.error("Timeout Empty! Retrying...")
                 continue
             except TimeoutsRetriesExceeded:
                 raise TimeoutsRetriesExceeded
             data = f_controller.read()
             file_size -= data_length
-        send_close_and_wait_ack(self.socket, msq_queue, client_port, command)
         f_controller.close()
 
-    def download(self, first_encoded_msg,
-                 file_path, command, client_port=LOCAL_PORT):
+    def receive_file(self, first_encoded_msg,
+                     file_path, client_port=LOCAL_PORT):
         f_controller = FileController.from_file_name(file_path, WRITE_MODE)
         self.socket.settimeout(None)
         encoded_messge = first_encoded_msg
@@ -122,5 +124,4 @@ class StopAndWaitProtocol():
             self.receive(decoded_message, client_port, f_controller)
             encoded_messge = receive_msg(None, self.socket)
             decoded_message = Message.decode(encoded_messge)
-        send_close_and_wait_ack(self.socket, None, client_port, command)
         f_controller.close()

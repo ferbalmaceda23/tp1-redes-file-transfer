@@ -233,8 +233,8 @@ class SelectiveRepeatProtocol:
             self.not_acknowledged += amount
         self.not_acknowledged_lock.release()
 
-    def upload(self, args=None, msq_queue=None,
-               client_port=LOCAL_PORT, file_path=None):
+    def send_file(self, args=None, msq_queue=None,
+                  client_port=LOCAL_PORT, file_path=None):
         f_controller = None
         command = Command.UPLOAD
         if file_path:

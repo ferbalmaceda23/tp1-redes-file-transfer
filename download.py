@@ -56,9 +56,8 @@ def download_using_protocol(client, args):
         raise ServerConnectionError
 
     file_name = get_file_name(DOWNLOADS_DIR, args.dst)
-    client.protocol.download(first_encoded_msg=encoded_messge,
-                             file_path=file_name,
-                             command=Command.DOWNLOAD)
+    client.protocol.receive_file(first_encoded_msg=encoded_messge,
+                                 file_path=file_name)
     logging.info("Download finished")
 
 
