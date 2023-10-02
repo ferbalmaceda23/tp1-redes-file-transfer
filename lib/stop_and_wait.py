@@ -64,11 +64,9 @@ class StopAndWaitProtocol():
                       file_controller.file_name, data, self.seq_num, 0)
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
         log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
-        timeout = None
-        if msg_queue:
-            timeout = TIMEOUT
+
         try:
-            encoded_message = receive_msg(msg_queue, self.socket, timeout)
+            encoded_message = receive_msg(msg_queue, self.socket, TIMEOUT)
             if Message.decode(encoded_message).ack_number <= self.seq_num:
                 logging.info(f"Client {port}: received duplicated ACK")
                 raise DuplicatedACKError
@@ -112,7 +110,7 @@ class StopAndWaitProtocol():
         f_controller.close()
 
     def receive_file(self, first_encoded_msg,
-                     file_path, client_port=LOCAL_PORT):
+                     file_path, client_port=LOCAL_PORT, msg_queue=None):
         f_controller = FileController.from_file_name(file_path, WRITE_MODE)
         self.socket.settimeout(None)
         encoded_messge = first_encoded_msg
@@ -120,7 +118,7 @@ class StopAndWaitProtocol():
 
         while decoded_message.flags != CLOSE.encoded:
             self.receive(decoded_message, client_port, f_controller)
-            encoded_messge = receive_msg(None, self.socket)
+            encoded_messge = receive_msg(msg_queue, self.socket)
             decoded_message = Message.decode(encoded_messge)
         self.socket.sendto(Message.close_ack_msg(decoded_message.command),
                            (LOCAL_HOST, client_port))

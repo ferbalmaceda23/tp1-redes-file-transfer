@@ -162,7 +162,8 @@ class Server:
         logging.info(f"Uploading file to: {file_name}")
         self.protocol.receive_file(first_encoded_msg=msg,
                                    client_port=client_port,
-                                   file_path=file_name)
+                                   file_path=file_name,
+                                   msg_queue=client_msg_queue)
         logging.info(f"File {file_name} uploaded, closing connection")
 
     def dequeue_decoded_msg(self, client_msg_queue):

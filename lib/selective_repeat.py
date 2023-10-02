@@ -36,7 +36,7 @@ class SelectiveRepeatProtocol:
         while continue_receiving:
             try:
                 maybe_ack = None
-                maybe_ack = self.receive_msg(msq_queue)
+                maybe_ack = receive_msg(msq_queue, self.socket, 1.5)
                 msg_received = Message.decode(maybe_ack)
                 if msg_received.flags == ACK.encoded:
                     self.receive_ack_and_join_ack_thread(client_port,
@@ -75,20 +75,12 @@ class SelectiveRepeatProtocol:
             try:
                 send_close(self.socket, command,
                            (LOCAL_HOST, client_port))
-                maybe_close_ack = self.receive_msg(msq_queue)
+                maybe_close_ack = receive_msg(msq_queue, self.socket, 1.5)
                 if Message.decode(maybe_close_ack).flags == CLOSE_ACK.encoded:
                     logging.debug("Received close ACK")
                 break
             except (socket.timeout, Empty):
                 close_tries += 1
-
-    def receive_msg(self, msq_queue):
-        if msq_queue:
-            maybe_ack = msq_queue.get(block=True, timeout=1.5)
-            # TODO ajustar TO o hacer cte para usar el de utils
-        else:
-            maybe_ack = receive_encoded_from_socket(self.socket)
-        return maybe_ack
 
     def is_base_ack(self, ack_number):
         return ack_number == self.send_base
@@ -223,7 +215,7 @@ class SelectiveRepeatProtocol:
             self.not_acknowledged += amount
         self.not_acknowledged_lock.release()
 
-    def send_file(self, args=None, msq_queue=None,
+    def send_file(self, args=None, msg_queue=None,
                   client_port=LOCAL_PORT, file_path=None):
         f_controller = None
         command = Command.UPLOAD
@@ -237,7 +229,7 @@ class SelectiveRepeatProtocol:
         self.set_window_size(int(file_size / DATA_SIZE))
         data = f_controller.read()
         ack_thread = Thread(target=self.receive_acks,
-                            args=(msq_queue, client_port, command))
+                            args=(msg_queue, client_port, command))
         ack_thread.start()
 
         while file_size > 0:
@@ -295,7 +287,7 @@ class SelectiveRepeatProtocol:
         log_sent_msg(Message.decode(encoded_msg), self.seq_num)
 
     def receive_file(self, first_encoded_msg,
-                     file_path, client_port=LOCAL_PORT):
+                     file_path, client_port=LOCAL_PORT, msg_queue=None):
         f_controller = FileController.from_file_name(file_path, WRITE_MODE)
         self.socket.settimeout(None)
         encoded_messge = first_encoded_msg
@@ -303,7 +295,7 @@ class SelectiveRepeatProtocol:
 
         while decoded_message.flags != CLOSE.encoded:
             self.receive(decoded_message, client_port, f_controller)
-            encoded_messge = receive_msg(None, self.socket)
+            encoded_messge = receive_msg(msg_queue, self.socket)
             decoded_message = Message.decode(encoded_messge)
         self.socket.sendto(Message.close_ack_msg(decoded_message.command),
                            (LOCAL_HOST, client_port))
