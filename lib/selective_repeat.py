@@ -42,15 +42,7 @@ class SelectiveRepeatProtocol:
                     self.receive_ack_and_join_ack_thread(client_port,
                                                          msg_received)
                     continue_receiving = self.acks_received <= self.max_sqn
-            except socket.timeout:
-                logging.error("Timeout on main thread ack")
-                tries += 1
-                if tries == MAX_ACK_RESEND_TRIES:
-                    logging.error("Max tries reached for main ACK thread")
-                    for thread in self.thread_pool.values():
-                        thread.join()
-                    continue_receiving = False
-            except Empty:
+            except (socket.timeout, Empty):
                 logging.error("Timeout on main thread ack")
                 tries += 1
                 if tries == MAX_ACK_RESEND_TRIES:
@@ -87,9 +79,7 @@ class SelectiveRepeatProtocol:
                 if Message.decode(maybe_close_ack).flags == CLOSE_ACK.encoded:
                     logging.debug("Received close ACK")
                 break
-            except socket.timeout:
-                close_tries += 1
-            except Empty:
+            except (socket.timeout, Empty):
                 close_tries += 1
 
     def receive_msg(self, msq_queue):

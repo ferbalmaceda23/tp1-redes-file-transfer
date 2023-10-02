@@ -33,9 +33,7 @@ def send_close_and_wait_ack(socket_, msq_queue, client_port, command):
             if Message.decode(maybe_close_ack).flags == CLOSE_ACK.encoded:
                 logging.debug("Received close ACK")
             break
-        except socket.timeout:
-            close_tries += 1
-        except Empty:
+        except (socket.timeout, Empty):
             close_tries += 1
 
 

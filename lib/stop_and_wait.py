@@ -76,12 +76,9 @@ class StopAndWaitProtocol():
             else:
                 self.tries_send = 0
                 self.seq_num += 1
-        except socket.timeout:
+        except (socket.timeout, Empty) as e:
             logging.error("Timeout receiving ACK message")
-            raise socket.timeout
-        except Empty:
-            logging.error("Timeout receiving ACK message")
-            raise Empty
+            raise e
 
     def send_file(self, args=None, msq_queue=None,
                   client_port=LOCAL_PORT, file_path=None):
@@ -101,11 +98,8 @@ class StopAndWaitProtocol():
                 self.send(command, client_port, data, f_controller, msq_queue)
             except DuplicatedACKError:
                 continue
-            except socket.timeout:
+            except (socket.timeout, Empty):
                 logging.error("Timeout! Retrying...")
-                continue
-            except Empty:
-                logging.error("Timeout Empty! Retrying...")
                 continue
             except TimeoutsRetriesExceeded:
                 raise TimeoutsRetriesExceeded
