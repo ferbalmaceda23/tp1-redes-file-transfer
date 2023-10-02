@@ -1,17 +1,13 @@
 import logging
 import os
-from queue import Queue, Empty
-from lib.exceptions import DuplicatedACKError, WindowFullError
-from lib.file_controller import FileController
+from queue import Queue
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
-from lib.constants import DATA_SIZE, LOCAL_HOST, MAX_TIMEOUT_RETRIES
-from lib.constants import READ_MODE, BUFFER_SIZE, TIMEOUT
-from lib.constants import WRITE_MODE, DEFAULT_FOLDER, ERROR_EXISTING_FILE
-from lib.flags import CLOSE_ACK, HI, HI_ACK, CLOSE, LIST
+from lib.constants import BUFFER_SIZE, TIMEOUT
+from lib.constants import DEFAULT_FOLDER, ERROR_EXISTING_FILE
+from lib.flags import HI, HI_ACK, LIST
 from lib.commands import Command
 from lib.message import Message
-from lib.selective_repeat import SelectiveRepeatProtocol
 from lib.utils import get_file_name, select_protocol
 from lib.message_utils import send_close
 
@@ -138,14 +134,15 @@ class Server:
         else:
             file_path = os.path.join(self.storage, msg.file_name)
             if not os.path.exists(file_path):
-                self.protocol.send_error(command, client_port, ERROR_EXISTING_FILE)
-                logging.error(f"File {msg.file_name} does not exist, try again")
+                self.protocol.send_error(command, client_port,
+                                         ERROR_EXISTING_FILE)
+                logging.error(f"File {msg.file_name} doesn't exist, try again")
                 return
 
             self.protocol.upload(msq_queue=msg_queue,
                                  client_port=client_port,
                                  file_path=file_path)
-
+            # TODO manejar la ex de timeoutretries exceeded
 
     def send_file_list(self, client_address):
         files = os.listdir(self.storage)
@@ -155,17 +152,14 @@ class Server:
         # TODO join thread. no aca
 
     def handle_upload(self, client_port, client_msg_queue):
-        msg = self.dequeue_decoded_msg(client_msg_queue)  # first upload msg
+        msg = client_msg_queue.get(block=True)  # first upload msg
         file_name = get_file_name(self.storage, msg.file_name)
         logging.info(f"Uploading file to: {file_name}")
-        file_controller = FileController.from_file_name(file_name, WRITE_MODE)
-        while msg.flags != CLOSE.encoded:
-            self.protocol.receive(msg, client_port, file_controller)
-            msg = self.dequeue_decoded_msg(client_msg_queue)
+        self.protocol.download(first_encoded_msg=msg,
+                               client_port=client_port,
+                               file_path=file_name,
+                               command=Command.UPLOAD)
         logging.info(f"File {file_name} uploaded, closing connection")
-        self.socket.sendto(Message.close_ack_msg(Command.UPLOAD),
-                           (LOCAL_HOST, client_port)) #TODO Q HACEMOS SI NUUUNCA LO RECIBE AL CLOSE?
-        file_controller.close()
 
     def dequeue_decoded_msg(self, client_msg_queue):
         # Sacamos el timeout de la cola porque en el upload

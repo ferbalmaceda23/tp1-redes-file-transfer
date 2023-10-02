@@ -1,15 +1,12 @@
 import socket
 from lib.commands import Command
-from lib.constants import DOWNLOADS_DIR, MAX_TIMEOUT_RETRIES, SELECTIVE_REPEAT
-from lib.constants import STOP_AND_WAIT, WRITE_MODE
+from lib.constants import DOWNLOADS_DIR, MAX_TIMEOUT_RETRIES
 from lib.exceptions import ServerConnectionError
-from lib.file_controller import FileController
 from lib.message import Message
 from lib.log import prepare_logging
-from lib.constants import LOCAL_PORT
 from lib.client import Client
 from lib.args_parser import parse_args_download
-from lib.flags import CLOSE, LIST, NO_FLAGS
+from lib.flags import LIST
 import sys
 import logging
 import os
@@ -25,10 +22,8 @@ def download(client, args):
     try:
         if not os.path.isdir(DOWNLOADS_DIR):
             os.makedirs(DOWNLOADS_DIR, exist_ok=True)
-        file_name = get_file_name(DOWNLOADS_DIR, args.dst)
-        file_controller = FileController.from_file_name(file_name,
-                                                        WRITE_MODE)
-        download_using_protocol(client, args, file_controller)
+
+        download_using_protocol(client, args)
     except ServerConnectionError:
         logging.error("Server is offline")
         sys.exit(1)
@@ -42,9 +37,9 @@ def show_server_files(client):
     client.send(msg_to_send.encode())
 
 
-def download_using_protocol(client, args, file_controller):
+def download_using_protocol(client, args):
     msg_to_send = Message.download_msg(args.name)
- 
+
     encoded_messge = None
     retries = 0
     while retries < MAX_TIMEOUT_RETRIES:
@@ -60,15 +55,11 @@ def download_using_protocol(client, args, file_controller):
                       + "HI_ACK or first DOWNLOAD not received")
         raise ServerConnectionError
 
-    client.socket.settimeout(None)
-    message = Message.decode(encoded_messge)
-    while message.flags != CLOSE.encoded:  # TODO se esta perdiendo el close?
-        client.protocol.receive(message, LOCAL_PORT, file_controller)
-        encoded_messge, _ = client.receive()
-        message = Message.decode(encoded_messge)
-    client.send(Message.close_ack_msg(Command.DOWNLOAD))
-    logging.info("Finished download")
-    file_controller.close()
+    file_name = get_file_name(DOWNLOADS_DIR, args.dst)
+    client.protocol.download(first_encoded_msg=encoded_messge,
+                             file_path=file_name,
+                             command=Command.DOWNLOAD)
+    logging.info("Download finished")
 
 
 if __name__ == "__main__":

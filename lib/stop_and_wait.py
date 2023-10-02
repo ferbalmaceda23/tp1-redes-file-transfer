@@ -3,8 +3,9 @@ from queue import Empty
 import socket
 from lib.commands import Command
 from lib.file_controller import FileController
-from lib.flags import NO_FLAGS
-from lib.constants import LOCAL_HOST, LOCAL_PORT, MAX_TIMEOUT_RETRIES
+from lib.flags import CLOSE, NO_FLAGS
+from lib.constants import LOCAL_HOST, LOCAL_PORT
+from lib.constants import MAX_TIMEOUT_RETRIES, WRITE_MODE
 from lib.constants import READ_MODE, STOP_AND_WAIT
 from lib.message import Message
 from lib.exceptions import DuplicatedACKError, TimeoutsRetriesExceeded
@@ -106,4 +107,18 @@ class StopAndWaitProtocol():
             data = f_controller.read()
             file_size -= data_length
         send_close_and_wait_ack(self.socket, msq_queue, client_port, command)
+        f_controller.close()
+
+    def download(self, first_encoded_msg,
+                 file_path, command, client_port=LOCAL_PORT):
+        f_controller = FileController.from_file_name(file_path, WRITE_MODE)
+        self.socket.settimeout(None)
+        encoded_messge = first_encoded_msg
+        decoded_message = Message.decode(encoded_messge)
+
+        while decoded_message.flags != CLOSE.encoded:
+            self.receive(decoded_message, client_port, f_controller)
+            encoded_messge = receive_msg(None, self.socket)
+            decoded_message = Message.decode(encoded_messge)
+        send_close_and_wait_ack(self.socket, None, client_port, command)
         f_controller.close()
