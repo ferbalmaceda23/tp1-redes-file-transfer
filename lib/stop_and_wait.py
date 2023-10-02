@@ -9,7 +9,7 @@ from lib.constants import MAX_TIMEOUT_RETRIES, WRITE_MODE
 from lib.constants import READ_MODE, STOP_AND_WAIT
 from lib.message import Message
 from lib.exceptions import DuplicatedACKError, TimeoutsRetriesExceeded
-from lib.message_utils import receive_msg, send_ack
+from lib.message_utils import receive_msg, send_ack, send_close_and_wait_ack
 from lib.log import log_received_msg, log_sent_msg
 
 
@@ -80,7 +80,7 @@ class StopAndWaitProtocol():
             logging.error("Timeout receiving ACK message")
             raise e
 
-    def send_file(self, args=None, msq_queue=None,
+    def send_file(self, args=None, msg_queue=None,
                   client_port=LOCAL_PORT, file_path=None):
         f_controller = None
         command = Command.UPLOAD
@@ -95,7 +95,7 @@ class StopAndWaitProtocol():
         while file_size > 0:
             data_length = len(data)
             try:
-                self.send(command, client_port, data, f_controller, msq_queue)
+                self.send(command, client_port, data, f_controller, msg_queue)
             except DuplicatedACKError:
                 continue
             except (socket.timeout, Empty):
@@ -105,6 +105,11 @@ class StopAndWaitProtocol():
                 raise TimeoutsRetriesExceeded
             data = f_controller.read()
             file_size -= data_length
+        
+        send_close_and_wait_ack(socket_=self.socket,
+                                msq_queue=msg_queue,
+                                client_port=client_port,
+                                command=Command.DOWNLOAD)
         f_controller.close()
 
     def receive_file(self, first_encoded_msg,
@@ -118,4 +123,6 @@ class StopAndWaitProtocol():
             self.receive(decoded_message, client_port, f_controller)
             encoded_messge = receive_msg(None, self.socket)
             decoded_message = Message.decode(encoded_messge)
+        self.socket.sendto(Message.close_ack_msg(decoded_message.command),
+                           (LOCAL_HOST, client_port))
         f_controller.close()

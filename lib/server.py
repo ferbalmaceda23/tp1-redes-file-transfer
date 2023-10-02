@@ -119,7 +119,7 @@ class Server:
                 + "closing connection"
             )
             self.close_client_connection(client_port)
-            send_close(self.socket, decoded_msg.command, client_address)
+            send_close(self.socket, decoded_msg.command, client_address)  # TODO mandar un error
 
     def send_hi_ack(self, client_address, decoded_msg):
         hi_ack = Message.hi_ack_msg(decoded_msg.command)
@@ -141,13 +141,9 @@ class Server:
                 return
 
             try:
-                self.protocol.send_file(msq_queue=msg_queue,
+                self.protocol.send_file(msg_queue=msg_queue,
                                         client_port=client_port,
                                         file_path=file_path)
-                send_close_and_wait_ack(socket_=self.socket,
-                                        msq_queue=msg_queue,
-                                        client_port=client_port,
-                                        command=Command.DOWNLOAD)
                 self.close_client_connection(client_address)
             except TimeoutsRetriesExceeded:
                 logging.error("Timeouts retries exceeded")
