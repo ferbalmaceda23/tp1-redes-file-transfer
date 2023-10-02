@@ -1,6 +1,6 @@
 import socket
 from lib.commands import Command
-from lib.constants import DOWNLOADS_DIR, SELECTIVE_REPEAT
+from lib.constants import DOWNLOADS_DIR, MAX_TIMEOUT_RETRIES, SELECTIVE_REPEAT
 from lib.constants import STOP_AND_WAIT, WRITE_MODE
 from lib.exceptions import ServerConnectionError
 from lib.file_controller import FileController
@@ -43,15 +43,21 @@ def show_server_files(client):
 
 
 def download_using_protocol(client, args, file_controller):
-    msg_to_send = Message(Command.DOWNLOAD, NO_FLAGS, 0, args.name, b"")
-    # TODO usar el de message
-    client.send(msg_to_send.encode())
+    msg_to_send = Message.download_msg(args.name)
+ 
     encoded_messge = None
-    try:
-        encoded_messge, _ = client.receive()
-    except socket.timeout:
-        logging.error("Connection error: HI_ACK not received") # FIXME no es por el HI_ACK solo. Puede ser q se pierda el primer download
-        file_controller.delete()
+    retries = 0
+    while retries < MAX_TIMEOUT_RETRIES:
+        try:
+            client.send(msg_to_send)
+            encoded_messge, _ = client.receive()
+            break
+        except socket.timeout:
+            logging.error("Download timeout! Retrying...")
+            retries += 1
+    if retries == MAX_TIMEOUT_RETRIES:
+        logging.error("Connection error: "
+                      + "HI_ACK or first DOWNLOAD not received")
         raise ServerConnectionError
 
     client.socket.settimeout(None)
