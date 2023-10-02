@@ -22,11 +22,14 @@ def send_close(socket, command, client_address):
     socket.sendto(Message.close_msg(command), client_address)
 
 
-def send_close_and_wait_ack(socket, msq_queue, client_port, command):
+def send_close_and_wait_ack(socket, msq_queue, client_port, command, server_address=None):
     close_tries = 0
     while close_tries < MAX_TIMEOUT_RETRIES:
         try:
-            send_close(socket, command,
+            if server_address:
+                send_close(socket, command, server_address)
+            else:
+                send_close(socket, command,
                        (LOCAL_HOST, client_port))
             maybe_close_ack = receive_msg(msq_queue, socket)
             if Message.decode(maybe_close_ack).flags == CLOSE_ACK.encoded:

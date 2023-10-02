@@ -12,6 +12,7 @@ class Client:
         self.ip = ip
         self.port = port
         self.protocol = select_protocol(protocol)
+        self.server_address = None
 
     # handshake
     def start(self, command, action):
@@ -23,7 +24,8 @@ class Client:
         while hi_tries < MAX_TIMEOUT_RETRIES:
             try:
                 self.send_hi_to_server(command, self.protocol)
-                enconded_message, _ = self.socket.recvfrom(BUFFER_SIZE)
+                enconded_message, server_address = self.socket.recvfrom(BUFFER_SIZE)
+                self.server_address = server_address
                 maybe_hi_ack = Message.decode(enconded_message)
                 break
             except ValueError as e:
@@ -40,7 +42,7 @@ class Client:
             raise ServerConnectionError
 
         if maybe_hi_ack.flags == HI_ACK.encoded:
-            self.send(Message.hi_ack_msg(command))
+            self.send(Message.hi_ack_msg(command), self.server_address)
             logging.info("Connected to server")
 
         action()
@@ -50,8 +52,11 @@ class Client:
         self.send(hi_msg)
         logging.info("Sent HI to server")
 
-    def send(self, message):
-        self.socket.sendto(message, (self.ip, self.port))
+    def send(self, message, address=None):
+        if address:
+            self.socket.sendto(message, address)
+        else:
+            self.socket.sendto(message, (self.ip, self.port))
 
     def receive(self):
         return self.socket.recvfrom(BUFFER_SIZE)

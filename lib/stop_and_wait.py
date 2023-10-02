@@ -10,6 +10,7 @@ from lib.message import Message
 from lib.exceptions import DuplicatedACKError, TimeoutsRetriesExceeded
 from lib.message_utils import receive_msg, send_ack, send_close_and_wait_ack
 from lib.log import log_received_msg, log_sent_msg
+from time import sleep
 
 
 class StopAndWaitProtocol():
@@ -20,7 +21,7 @@ class StopAndWaitProtocol():
         self.tries_send = 0
         self.name = STOP_AND_WAIT
 
-    def receive(self, decoded_msg, port, file_controller):
+    def receive(self, decoded_msg, port, file_controller, transfer_socket=None):
         print(
             f"decoded_msg.seq_number: {decoded_msg.seq_number} " +
             f"and self.ack_num: {self.ack_num}")
@@ -41,12 +42,20 @@ class StopAndWaitProtocol():
         # Nunca va a llegar un seq mayor al ack por el escenario 1)
         if self.ack_num > decoded_msg.seq_number + 1:
             log_received_msg(decoded_msg, port)
-            send_ack(decoded_msg.command, port, decoded_msg.seq_number + 1,
+            if transfer_socket:
+                ack_msg = Message.ack_msg(decoded_msg.command, decoded_msg.seq_number + 1)
+                transfer_socket.sendto(ack_msg, (LOCAL_HOST, port))
+            else:
+                send_ack(decoded_msg.command, port, decoded_msg.seq_number + 1,
                      self.socket)
         else:
             file_controller.write_file(decoded_msg.data)
             log_received_msg(decoded_msg, port)
-            send_ack(decoded_msg.command, port, self.ack_num, self.socket)
+            if transfer_socket:
+                ack_msg = Message.ack_msg(decoded_msg.command, self.ack_num)
+                transfer_socket.sendto(ack_msg, (LOCAL_HOST, port))
+            else:
+                send_ack(decoded_msg.command, port, self.ack_num, self.socket)
             self.ack_num += 1
 
     def send_error(self, command, port, error_msg):
@@ -54,7 +63,7 @@ class StopAndWaitProtocol():
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
         log_sent_msg(msg, self.seq_num)
 
-    def send(self, command, port, data, file_controller, msg_queue=None):
+    def send(self, command, port, data, file_controller, msg_queue=None, server_address=None):
         if self.tries_send >= MAX_TIMEOUT_RETRIES:
             print(self.tries_send)
             logging.error("Max timeout retries reached")
@@ -62,7 +71,12 @@ class StopAndWaitProtocol():
         self.tries_send += 1
         msg = Message(command, NO_FLAGS, len(data),
                       file_controller.file_name, data, self.seq_num, 0)
-        self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
+        if server_address:
+            print("[<<->>] server_address=", server_address)
+            self.socket.sendto(msg.encode(), server_address)
+        else:
+            self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
+
         log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
         try:
             encoded_message = receive_msg(msg_queue, self.socket)
@@ -80,7 +94,7 @@ class StopAndWaitProtocol():
             raise Empty
 
     def upload(self, args=None, msq_queue=None,
-               client_port=LOCAL_PORT, file_path=None):
+               client_port=LOCAL_PORT, file_path=None, server_address=None):
         f_controller = None
         command = Command.UPLOAD
         if file_path:
@@ -94,7 +108,8 @@ class StopAndWaitProtocol():
         while file_size > 0:
             data_length = len(data)
             try:
-                self.send(command, client_port, data, f_controller, msq_queue)
+                self.send(command, client_port, data, f_controller, msq_queue, server_address)
+                sleep(1.5)
             except DuplicatedACKError:
                 continue
             except socket.timeout:
@@ -105,5 +120,5 @@ class StopAndWaitProtocol():
                 continue
             data = f_controller.read()
             file_size -= data_length
-        send_close_and_wait_ack(self.socket, msq_queue, client_port, command)
+        send_close_and_wait_ack(self.socket, msq_queue, client_port, command, server_address)
         f_controller.close()

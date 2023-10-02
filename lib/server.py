@@ -1,19 +1,18 @@
 import logging
 import os
-from queue import Queue, Empty
-from lib.exceptions import DuplicatedACKError, WindowFullError
+from queue import Queue
 from lib.file_controller import FileController
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
-from lib.constants import DATA_SIZE, LOCAL_HOST, MAX_TIMEOUT_RETRIES
-from lib.constants import READ_MODE, BUFFER_SIZE, TIMEOUT
+from lib.constants import LOCAL_HOST
+from lib.constants import BUFFER_SIZE, TIMEOUT
 from lib.constants import WRITE_MODE, DEFAULT_FOLDER, ERROR_EXISTING_FILE
-from lib.flags import CLOSE_ACK, HI, HI_ACK, CLOSE, LIST
+from lib.flags import HI, HI_ACK, CLOSE, LIST
 from lib.commands import Command
 from lib.message import Message
-from lib.selective_repeat import SelectiveRepeatProtocol
 from lib.utils import get_file_name, select_protocol
 from lib.message_utils import send_close
+from threading import Lock
 
 
 class Server:
@@ -21,7 +20,9 @@ class Server:
         self.ip = ip
         self.port = port
         self.clients = {}
-        self.protocol = None
+        #self.protocol = None
+        self.protocols = {}
+        self.protocols_lock = Lock()
         storage = args.storage
         self.storage = storage if storage is not None else DEFAULT_FOLDER
 
@@ -40,7 +41,9 @@ class Server:
 
     def handle_socket_messages(self):
         while True:
+            print("|||| WAITING IN WELCOME SOCKET TO RECEIVE ||||")
             encoded_message, client_address = self.socket.recvfrom(BUFFER_SIZE)
+            print(f"|||| RECEIVED FROM WELCOME SOCKET: {client_address[1]}||||")
             client_port = client_address[1]
             try:
                 client_msg_queue = self.clients[client_port]
@@ -76,16 +79,23 @@ class Server:
             f"Client {client_port}: wants to connect, sending confirmation, "
             + f"message type: {decoded_msg.command}. Protocol: {protocol_RDT}"
         )
-        self.protocol = select_protocol(protocol_RDT)
-        self.protocol = self.protocol(self.socket)
-        self.send_hi_ack(client_address, decoded_msg)
+
+        protocol = select_protocol(protocol_RDT)
+        self.protocols_lock.acquire()
+        self.protocols[client_port] = protocol(self.socket)
+        self.protocols_lock.release()
+        transfer_socket = socket(AF_INET, SOCK_DGRAM)
+
+        #self.protocol = self.protocol(transfer_socket)
+        self.send_hi_ack(client_address, decoded_msg, transfer_socket)
 
         try:
-            encoded_message = msg_queue.get(block=True)
+            #encoded_message = msg_queue.get(block=True)
+            encoded_message = transfer_socket.recvfrom(BUFFER_SIZE)[0]
             decoded_msg = Message.decode(encoded_message)
             if decoded_msg.flags == HI_ACK.encoded:
                 self.init_file_transfer_operation(
-                    msg_queue, decoded_msg, client_address
+                    msg_queue, decoded_msg, client_address, transfer_socket
                 )
             else:
                 self.close_client_connection(client_address)
@@ -104,7 +114,7 @@ class Server:
         logging.info(f"Client {client_port}: closing connection...")
 
     def init_file_transfer_operation(
-        self, client_msg_queue, decoded_msg, client_address
+        self, client_msg_queue, decoded_msg, client_address, transfer_socket
     ):
         client_port = client_address[1]
         logging.info(
@@ -113,9 +123,9 @@ class Server:
         )
         self.clients[client_port] = client_msg_queue
         if decoded_msg.command == Command.DOWNLOAD:
-            self.handle_download(client_address, client_msg_queue)
+            self.handle_download(client_address, client_msg_queue, transfer_socket)
         elif decoded_msg.command == Command.UPLOAD:
-            self.handle_upload(client_port, client_msg_queue)
+            self.handle_upload(client_port, client_msg_queue, transfer_socket)
         else:
             logging.info(
                 f"Client {client_port}: unknown command "
@@ -124,11 +134,11 @@ class Server:
             self.close_client_connection(client_port)
             send_close(self.socket, decoded_msg.command, client_address)
 
-    def send_hi_ack(self, client_address, decoded_msg):
+    def send_hi_ack(self, client_address, decoded_msg, transfer_socket):
         hi_ack = Message.hi_ack_msg(decoded_msg.command)
-        self.socket.sendto(hi_ack, client_address)
+        transfer_socket.sendto(hi_ack, client_address)
 
-    def handle_download(self, client_address, msg_queue):
+    def handle_download(self, client_address, msg_queue, transfer_socket):
         client_port = client_address[1]
         msg = self.dequeue_decoded_msg(msg_queue)
         command = msg.command
@@ -154,16 +164,23 @@ class Server:
         self.close_client_connection(client_address)
         # TODO join thread. no aca
 
-    def handle_upload(self, client_port, client_msg_queue):
-        msg = self.dequeue_decoded_msg(client_msg_queue)  # first upload msg
+    def handle_upload(self, client_port, client_msg_queue, transfer_socket):
+        #msg = self.dequeue_decoded_msg(client_msg_queue)  # first upload msg
+        self.protocols_lock.acquire()
+        protocol = self.protocols[client_port]
+        self.protocols_lock.release()
+        msg = transfer_socket.recvfrom(BUFFER_SIZE)[0]
+        msg = Message.decode(msg)
         file_name = get_file_name(self.storage, msg.file_name)
         logging.info(f"Uploading file to: {file_name}")
         file_controller = FileController.from_file_name(file_name, WRITE_MODE)
         while msg.flags != CLOSE.encoded:
-            self.protocol.receive(msg, client_port, file_controller)
-            msg = self.dequeue_decoded_msg(client_msg_queue)
+            protocol.receive(msg, client_port, file_controller, transfer_socket)
+            msg = transfer_socket.recvfrom(BUFFER_SIZE)[0]
+            msg = Message.decode(msg)
+            # msg = self.dequeue_decoded_msg(client_msg_queue)
         logging.info(f"File {file_name} uploaded, closing connection")
-        self.socket.sendto(Message.close_ack_msg(Command.UPLOAD),
+        transfer_socket.sendto(Message.close_ack_msg(Command.UPLOAD),
                            (LOCAL_HOST, client_port)) #TODO Q HACEMOS SI NUUUNCA LO RECIBE AL CLOSE?
         file_controller.close()
 

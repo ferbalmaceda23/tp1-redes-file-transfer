@@ -7,7 +7,7 @@ import sys
 
 
 def upload(client):
-    client.protocol.upload(args)
+    client.protocol.upload(args, server_address=client.server_address)
 
 
 if __name__ == "__main__":

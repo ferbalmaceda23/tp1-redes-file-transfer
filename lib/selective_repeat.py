@@ -120,7 +120,7 @@ class SelectiveRepeatProtocol:
             except KeyError:
                 continue
 
-    def receive(self, decoded_msg, port, file_controller):
+    def receive(self, decoded_msg, port, file_controller, transfer_socket=None):
         print("Waiting for ack", self.rcv_base)
 
         if decoded_msg.seq_number == self.rcv_base:
