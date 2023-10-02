@@ -10,6 +10,7 @@ from lib.flags import LIST
 import sys
 import logging
 import os
+from lib.message_utils import send_close
 from lib.utils import get_file_name
 
 
@@ -69,6 +70,7 @@ if __name__ == "__main__":
         client.start(Command.DOWNLOAD, lambda: download(client, args))
     except KeyboardInterrupt:
         logging.info("\nExiting...")
+        send_close(client.socket, Command.DOWNLOAD, (args.host, args.port))
         sys.exit(0)
     except Exception as e:
         logging.error(f"An error occurred: {e}")
