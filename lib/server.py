@@ -1,6 +1,8 @@
 import logging
 import os
-from queue import Queue
+from queue import Queue, Empty
+from lib.exceptions import DuplicatedACKError, TimeoutsRetriesExceeded, WindowFullError
+from lib.file_controller import FileController
 from socket import socket, AF_INET, SOCK_DGRAM
 from threading import Thread
 from lib.constants import BUFFER_SIZE, TIMEOUT
@@ -139,10 +141,14 @@ class Server:
                 logging.error(f"File {msg.file_name} doesn't exist, try again")
                 return
 
-            self.protocol.upload(msq_queue=msg_queue,
-                                 client_port=client_port,
-                                 file_path=file_path)
-            # TODO manejar la ex de timeoutretries exceeded
+            try:
+                self.protocol.upload(msq_queue=msg_queue,
+                                     client_port=client_port,
+                                     file_path=file_path)
+            except TimeoutsRetriesExceeded:
+                logging.error("Timeouts retries exceeded")
+                self.close_client_connection(client_address)
+
 
     def send_file_list(self, client_address):
         files = os.listdir(self.storage)
