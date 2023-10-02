@@ -48,7 +48,6 @@ class StopAndWaitProtocol():
             file_controller.write_file(decoded_msg.data)
             log_received_msg(decoded_msg, port)
             send_ack(decoded_msg.command, port, self.ack_num, self.socket)
-            print("Enviado ACK")
             self.ack_num += 1
 
     def send_error(self, command, port, error_msg):
@@ -105,7 +104,7 @@ class StopAndWaitProtocol():
                 raise TimeoutsRetriesExceeded
             data = f_controller.read()
             file_size -= data_length
-        
+
         send_close_and_wait_ack(socket_=self.socket,
                                 msq_queue=msg_queue,
                                 client_port=client_port,

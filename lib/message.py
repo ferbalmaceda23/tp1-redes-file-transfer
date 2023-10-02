@@ -118,7 +118,8 @@ class Message:
                       file_name, EMPTY_DATA)
         return msg.encode()
 
-    def close_ack_msg(command):
+    @classmethod
+    def close_ack_msg(cls, command):
         return Message(command, CLOSE_ACK, EMPTY_FILE, "", EMPTY_DATA).encode()
 
     @classmethod

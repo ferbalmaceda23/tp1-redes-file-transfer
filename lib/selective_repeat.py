@@ -2,13 +2,13 @@ import logging
 import socket
 from threading import Thread, Lock
 from lib.commands import Command
-from lib.constants import DATA_SIZE, LOCAL_HOST, MAX_TIMEOUT_RETRIES, TIMEOUT
+from lib.constants import DATA_SIZE, LOCAL_HOST, MAX_TIMEOUT_RETRIES, TIMEOUT, WRITE_MODE
 from lib.constants import LOCAL_PORT, READ_MODE, SELECTIVE_REPEAT
 from lib.constants import MAX_WINDOW_SIZE, MAX_ACK_RESEND_TRIES
 from lib.exceptions import WindowFullError
 from lib.file_controller import FileController
-from lib.flags import ACK, CLOSE_ACK, NO_FLAGS
-from lib.message_utils import receive_encoded_from_socket, send_ack, send_close
+from lib.flags import ACK, CLOSE, CLOSE_ACK, NO_FLAGS
+from lib.message_utils import receive_encoded_from_socket, receive_msg, send_ack, send_close
 from lib.log import log_received_msg, log_sent_msg
 from lib.message import Message
 from queue import Queue, Empty
@@ -293,3 +293,18 @@ class SelectiveRepeatProtocol:
         encoded_msg = Message.error_msg(command, error_msg)
         self.socket.sendto(encoded_msg, (LOCAL_HOST, port))
         log_sent_msg(Message.decode(encoded_msg), self.seq_num)
+
+    def receive_file(self, first_encoded_msg,
+                     file_path, client_port=LOCAL_PORT):
+        f_controller = FileController.from_file_name(file_path, WRITE_MODE)
+        self.socket.settimeout(None)
+        encoded_messge = first_encoded_msg
+        decoded_message = Message.decode(encoded_messge)
+
+        while decoded_message.flags != CLOSE.encoded:
+            self.receive(decoded_message, client_port, f_controller)
+            encoded_messge = receive_msg(None, self.socket)
+            decoded_message = Message.decode(encoded_messge)
+        self.socket.sendto(Message.close_ack_msg(decoded_message.command),
+                           (LOCAL_HOST, client_port))
+        f_controller.close()
