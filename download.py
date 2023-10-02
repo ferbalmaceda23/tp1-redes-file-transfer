@@ -9,22 +9,26 @@ from lib.log import prepare_logging
 from lib.constants import LOCAL_PORT
 from lib.client import Client
 from lib.args_parser import parse_args_download
-from lib.flags import CLOSE, NO_FLAGS
+from lib.flags import CLOSE, LIST, NO_FLAGS
 import sys
 import logging
 import os
 from lib.utils import get_file_name
 
 
-# TODO: pasar esto a stop and wait
 def download(client, args):
+    if args.files:
+        print("Server will show files...")
+        show_server_files(client)
+        sys.exit(0)
+
     try:
-        if not os.path.isdir(DOWNLOADS_DIR):
-            os.makedirs(DOWNLOADS_DIR, exist_ok=True)
         if args.RDTprotocol not in [STOP_AND_WAIT, SELECTIVE_REPEAT]:
             logging.error("Invalid RDT protocol")
             sys.exit(1)
-        
+
+        if not os.path.isdir(DOWNLOADS_DIR):
+            os.makedirs(DOWNLOADS_DIR, exist_ok=True)
         file_name = get_file_name(DOWNLOADS_DIR, args.dst)
         file_controller = FileController.from_file_name(file_name,
                                                         WRITE_MODE)
@@ -35,6 +39,11 @@ def download(client, args):
     except Exception as e:
         logging.error(f"An error occurred: {e}")
         sys.exit(1)
+
+
+def show_server_files(client):
+    msg_to_send = Message(Command.DOWNLOAD, LIST, 0, "", b"")
+    client.send(msg_to_send.encode())
 
 
 def download_using_protocol(client, args, file_controller):
@@ -48,7 +57,7 @@ def download_using_protocol(client, args, file_controller):
         logging.error("Connection error: HI_ACK not received")
         file_controller.delete()
         raise ServerConnectionError
-    
+
     client.socket.settimeout(None)
     message = Message.decode(encoded_messge)
     while message.flags != CLOSE.encoded:  # TODO se esta perdiendo el close?

@@ -61,7 +61,7 @@ def parse_args_download():
         "--dst",
         help="destination file path",
         action="store",
-        required=True,
+        required=False,
         type=str
     )
 
@@ -71,6 +71,13 @@ def parse_args_download():
         help="stop_and_wait (sw) or selective_repeat (sr)",
         action="store",
         type=str
+    )
+
+    parser.add_argument(
+        "-f",
+        "--files",
+        help="show available files to download",
+        action="store_true"
     )
 
     return validate_args_download(parser)
@@ -139,7 +146,8 @@ def validate_args_upload(parser):
 
 def validate_args_download(parser):
     args = parser.parse_args()
-
+    if not args.files and not args.dst:
+        parser.error("Either -f/--files or -d/--dst is required.")
     if args.verbose:
         print("verbosity turned on")
     if args.quiet:
