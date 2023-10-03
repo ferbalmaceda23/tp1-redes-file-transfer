@@ -13,7 +13,7 @@ def add_padding(data: bytes, n: int):
 
 """
 command: [DOWNLOAD, UPLOAD]
-flags: [HI, CLOSE, ACK, CORRUPTED_PACKAGE]
+flags: [HI, CLOSE, ACK, CLOSE_ACK, HI_ACK, ERROR, NO_FLAGS, LIST]
 file_length: [int]
 file_path: [str]
 file_name: [str]
@@ -118,10 +118,11 @@ class Message:
                       file_name, EMPTY_DATA)
         return msg.encode()
 
-    def close_ack_msg(command):
+    @classmethod
+    def close_ack_msg(cls, command):
         return Message(command, CLOSE_ACK, EMPTY_FILE, "", EMPTY_DATA).encode()
 
     @classmethod
     def error_msg(cls, command, error_msg):
-        msg = Message(command, ERROR, EMPTY_FILE, error_msg, EMPTY_DATA)
+        msg = Message(command, ERROR, EMPTY_FILE, "", data=error_msg.encode())
         return msg.encode()

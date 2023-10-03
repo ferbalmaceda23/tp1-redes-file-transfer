@@ -15,7 +15,6 @@ class Flag:
             6: "CLOSE_ACK",
             5: "LIST",
             2: "ACK",
-            1: "CORRUPTED_PACKAGE",
             0: "NO_FLAGS"
         }
         return flags_dict.get(self.encoded, "UNKNOWN FLAG")
@@ -30,6 +29,5 @@ CLOSE = Flag(4)
 HI = Flag(8)
 ERROR = Flag(3)
 ACK = Flag(2)
-CORRUPTED_PACKAGE = Flag(1)  # TODO SACAR SI NO SE USA
 NO_FLAGS = Flag(0)
 LIST = Flag(5)

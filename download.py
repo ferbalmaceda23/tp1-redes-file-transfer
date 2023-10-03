@@ -1,18 +1,16 @@
 import socket
 from lib.commands import Command
-from lib.constants import DOWNLOADS_DIR, SELECTIVE_REPEAT
-from lib.constants import STOP_AND_WAIT, WRITE_MODE
+from lib.constants import DOWNLOADS_DIR, MAX_TIMEOUT_RETRIES
 from lib.exceptions import ServerConnectionError
-from lib.file_controller import FileController
 from lib.message import Message
 from lib.log import prepare_logging
-from lib.constants import LOCAL_PORT
 from lib.client import Client
 from lib.args_parser import parse_args_download
-from lib.flags import CLOSE, LIST, NO_FLAGS
+from lib.flags import ERROR, LIST
 import sys
 import logging
 import os
+from lib.message_utils import send_close
 from lib.utils import get_file_name
 
 
@@ -25,10 +23,8 @@ def download(client, args):
     try:
         if not os.path.isdir(DOWNLOADS_DIR):
             os.makedirs(DOWNLOADS_DIR, exist_ok=True)
-        file_name = get_file_name(DOWNLOADS_DIR, args.dst)
-        file_controller = FileController.from_file_name(file_name,
-                                                        WRITE_MODE)
-        download_using_protocol(client, args, file_controller)
+
+        download_using_protocol(client, args)
     except ServerConnectionError:
         logging.error("Server is offline")
         sys.exit(1)
@@ -42,27 +38,33 @@ def show_server_files(client):
     client.send(msg_to_send.encode())
 
 
-def download_using_protocol(client, args, file_controller):
-    msg_to_send = Message(Command.DOWNLOAD, NO_FLAGS, 0, args.name, b"")
-    # TODO usar el de message
-    client.send(msg_to_send.encode())
+def download_using_protocol(client, args):
+    msg_to_send = Message.download_msg(args.name)
+
     encoded_messge = None
-    try:
-        encoded_messge, _ = client.receive()
-    except socket.timeout:
-        logging.error("Connection error: HI_ACK not received") # FIXME no es por el HI_ACK solo. Puede ser q se pierda el primer download
-        file_controller.delete()
+    retries = 0
+    while retries < MAX_TIMEOUT_RETRIES:
+        try:
+            client.send(msg_to_send)
+            encoded_messge, _ = client.receive()
+            break
+        except socket.timeout:
+            logging.error("Download timeout! Retrying...")
+            retries += 1
+    if retries == MAX_TIMEOUT_RETRIES:
+        logging.error("Connection error: "
+                      + "HI_ACK or first DOWNLOAD not received")
         raise ServerConnectionError
 
-    client.socket.settimeout(None)
-    message = Message.decode(encoded_messge)
-    while message.flags != CLOSE.encoded:  # TODO se esta perdiendo el close?
-        client.protocol.receive(message, LOCAL_PORT, file_controller)
-        encoded_messge, _ = client.receive()
-        message = Message.decode(encoded_messge)
-    client.send(Message.close_ack_msg(Command.DOWNLOAD))
-    logging.info("Finished download")
-    file_controller.close()
+    decoded_msg = Message.decode(encoded_messge)
+    if decoded_msg.flags == ERROR.encoded:
+        logging.error(decoded_msg.data)
+        sys.exit(1)
+
+    file_name = get_file_name(DOWNLOADS_DIR, args.dst)
+    client.protocol.receive_file(first_encoded_msg=encoded_messge,
+                                 file_path=file_name)
+    logging.info("Download finished")
 
 
 if __name__ == "__main__":
@@ -73,6 +75,7 @@ if __name__ == "__main__":
         client.start(Command.DOWNLOAD, lambda: download(client, args))
     except KeyboardInterrupt:
         logging.info("\nExiting...")
+        send_close(client.socket, Command.DOWNLOAD, (args.host, args.port))
         sys.exit(0)
     except Exception as e:
         logging.error(f"An error occurred: {e}")

@@ -3,8 +3,9 @@ from queue import Empty
 import socket
 from lib.commands import Command
 from lib.file_controller import FileController
-from lib.flags import NO_FLAGS
-from lib.constants import LOCAL_HOST, LOCAL_PORT, MAX_TIMEOUT_RETRIES
+from lib.flags import CLOSE, NO_FLAGS
+from lib.constants import BUFFER_SIZE, LOCAL_HOST, LOCAL_PORT, TIMEOUT
+from lib.constants import MAX_TIMEOUT_RETRIES, WRITE_MODE
 from lib.constants import READ_MODE, STOP_AND_WAIT
 from lib.message import Message
 from lib.exceptions import DuplicatedACKError, TimeoutsRetriesExceeded
@@ -43,6 +44,7 @@ class StopAndWaitProtocol():
         if self.ack_num > decoded_msg.seq_number + 1:
             log_received_msg(decoded_msg, port)
             if transfer_socket:
+                print("using transfer socket")
                 ack_msg = Message.ack_msg(decoded_msg.command, decoded_msg.seq_number + 1)
                 transfer_socket.sendto(ack_msg, (LOCAL_HOST, port))
             else:
@@ -65,7 +67,6 @@ class StopAndWaitProtocol():
 
     def send(self, command, port, data, file_controller, msg_queue=None, server_address=None):
         if self.tries_send >= MAX_TIMEOUT_RETRIES:
-            print(self.tries_send)
             logging.error("Max timeout retries reached")
             raise TimeoutsRetriesExceeded
         self.tries_send += 1
@@ -78,23 +79,21 @@ class StopAndWaitProtocol():
             self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
 
         log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
+
         try:
-            encoded_message = receive_msg(msg_queue, self.socket)
+            encoded_message = receive_msg(msg_queue, self.socket, TIMEOUT)
             if Message.decode(encoded_message).ack_number <= self.seq_num:
                 logging.info(f"Client {port}: received duplicated ACK")
                 raise DuplicatedACKError
             else:
                 self.tries_send = 0
                 self.seq_num += 1
-        except socket.timeout:
+        except (socket.timeout, Empty) as e:
             logging.error("Timeout receiving ACK message")
-            raise socket.timeout
-        except Empty:
-            logging.error("Timeout receiving ACK message")
-            raise Empty
+            raise e
 
-    def upload(self, args=None, msq_queue=None,
-               client_port=LOCAL_PORT, file_path=None, server_address=None):
+    def send_file(self, args=None, msg_queue=None,
+                  client_port=LOCAL_PORT, file_path=None, server_address=None):
         f_controller = None
         command = Command.UPLOAD
         if file_path:
@@ -108,17 +107,38 @@ class StopAndWaitProtocol():
         while file_size > 0:
             data_length = len(data)
             try:
-                self.send(command, client_port, data, f_controller, msq_queue, server_address)
-                sleep(1.5)
+                self.send(command, client_port, data, f_controller, msg_queue, server_address)
+                #sleep(1.5)
             except DuplicatedACKError:
                 continue
-            except socket.timeout:
+            except (socket.timeout, Empty):
                 logging.error("Timeout! Retrying...")
                 continue
-            except Empty:
-                logging.error("Timeout! Retrying...")
-                continue
+            except TimeoutsRetriesExceeded:
+                raise TimeoutsRetriesExceeded
             data = f_controller.read()
             file_size -= data_length
-        send_close_and_wait_ack(self.socket, msq_queue, client_port, command, server_address)
+
+        send_close_and_wait_ack(socket_=self.socket,
+                                msq_queue=msg_queue,
+                                client_port=client_port,
+                                command=Command.DOWNLOAD,
+                                server_address=server_address)
+        f_controller.close()
+
+    def receive_file(self, first_encoded_msg,
+                     file_path, client_port=LOCAL_PORT, msg_queue=None):
+        f_controller = FileController.from_file_name(file_path, WRITE_MODE)
+        self.socket.settimeout(None)
+        #encoded_messge = first_encoded_msg
+        encoded_messge = self.socket.recvfrom(BUFFER_SIZE)[0]
+        decoded_message = Message.decode(encoded_messge)
+
+        while decoded_message.flags != CLOSE.encoded:
+            self.receive(decoded_message, client_port, f_controller, transfer_socket=self.socket)
+            #encoded_messge = receive_msg(msg_queue, self.socket)
+            encoded_messge = self.socket.recvfrom(BUFFER_SIZE)[0]
+            decoded_message = Message.decode(encoded_messge)
+        self.socket.sendto(Message.close_ack_msg(decoded_message.command),
+                           (LOCAL_HOST, client_port))
         f_controller.close()
