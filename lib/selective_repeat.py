@@ -38,7 +38,7 @@ class SelectiveRepeatProtocol:
         self.socket.settimeout(1.5)
         while continue_receiving:
             try:
-                maybe_ack = self.socket.recvfrom(2048)[0]
+                maybe_ack = self.socket.recvfrom(BUFFER_SIZE)[0]
                 msg_received = Message.decode(maybe_ack)
                 if msg_received.flags == ACK.encoded:
                     self.receive_ack_and_join_ack_thread(client_port,
@@ -73,6 +73,7 @@ class SelectiveRepeatProtocol:
             self.move_send_window()
         else:
             logging.debug(f"Received messy ACK: {ack_number}")
+            self.buffer.append(msg_received)
 
     def send_close_and_wait_ack(self, msq_queue, client_port, command,
                                 server_address=None):
@@ -191,7 +192,7 @@ class SelectiveRepeatProtocol:
                 remaining_buffer.append(packet)
 
         self.buffer = remaining_buffer
-        self.move_rcv_window(next_base - self.rcv_base)
+        self.move_rcv_window(min(next_base - self.rcv_base, WINDOW_RECEIVER_SIZE))
 
     def write_to_file(self, file_controller, packet):
         logging.debug(f"Writing to file sqn: {packet.seq_number}")
@@ -278,10 +279,21 @@ class SelectiveRepeatProtocol:
         f_controller.close()
 
     def move_rcv_window(self, shift):
-        self.rcv_base += shift
+        self.rcv_base += min(shift, WINDOW_RECEIVER_SIZE)
 
     def move_send_window(self):
-        self.send_base += 1
+        self.buffer.sort()
+        next_base = self.send_base + 1
+        remaining_buffer = []
+
+        for ack in self.buffer:
+            if ack == next_base:
+                next_base += 1
+            else:
+                remaining_buffer.append(ack)
+
+        self.buffer = remaining_buffer
+        self.send_base += min((next_base - self.send_base), self.window_size)
 
     def set_window_size(self, number_of_packets):
         self.window_size = self.calculate_window_size(number_of_packets)
