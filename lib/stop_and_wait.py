@@ -23,9 +23,9 @@ class StopAndWaitProtocol():
         self.name = STOP_AND_WAIT
 
     def receive(self, decoded_msg, port, file_controller, transfer_socket=None):
-        print(
-            f"decoded_msg.seq_number: {decoded_msg.seq_number} " +
-            f"and self.ack_num: {self.ack_num}")
+        logging.debug(
+            f"Receiving: {decoded_msg}" +
+            f"next message expected: {self.ack_num}")
 
         # dos escenarios:
         # 1) El cliente manda el upload y no llega
@@ -78,9 +78,7 @@ class StopAndWaitProtocol():
         else:
             self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
 
-        if command == Command.DOWNLOAD:
-            log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
-        # log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
+        log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
 
         self.socket.settimeout(TIMEOUT)
         try:
@@ -132,7 +130,8 @@ class StopAndWaitProtocol():
     def receive_file(self,
                      file_path, client_port=LOCAL_PORT, msg_queue=None, first_encoded_msg=None, server_address=None):
         f_controller = FileController.from_file_name(file_path, WRITE_MODE)
-        self.socket.settimeout(None)
+        self.socket.settimeout(5)
+        # por si se desconecta un cliente repentinamente
         encoded_messge = None
         if first_encoded_msg:
             encoded_messge = first_encoded_msg

@@ -2,7 +2,7 @@ import logging
 import socket
 from threading import Thread, Lock
 from lib.commands import Command
-from lib.constants import BUFFER_SIZE, DATA_SIZE, LOCAL_HOST, MAX_TIMEOUT_RETRIES, TIMEOUT, WRITE_MODE
+from lib.constants import BUFFER_SIZE, DATA_SIZE, LOCAL_HOST, MAX_TIMEOUT_RETRIES, TIMEOUT, WINDOW_RECEIVER_SIZE, WRITE_MODE
 from lib.constants import LOCAL_PORT, READ_MODE, SELECTIVE_REPEAT
 from lib.constants import MAX_WINDOW_SIZE, MAX_ACK_RESEND_TRIES
 from lib.exceptions import WindowFullError
@@ -21,7 +21,7 @@ class SelectiveRepeatProtocol:
         self.name = SELECTIVE_REPEAT
         self.send_base = 0  # it is the first packet in the window == its sqn
         self.rcv_base = 0
-        self.window_size = 6  # TODO revisar
+        self.window_size = WINDOW_RECEIVER_SIZE
         self.buffer = []
         self.not_acknowledged = 0  # n° packets sent but not acknowledged yet
         self.not_acknowledged_lock = Lock()
@@ -58,11 +58,12 @@ class SelectiveRepeatProtocol:
 
     def receive_ack_and_join_ack_thread(self, client_port, msg_received):
         ack_number = msg_received.ack_number
-        print(f"Received ACK: {ack_number}")
+        logging.debug(f"Received ACK: {ack_number}")
         self.join_ack_thread(msg_received)
         self.modify_not_acknowledged(-1)
         self.acks_received += 1
-        log_received_msg(msg_received, client_port)
+        if(msg_received.command == Command.DOWNLOAD):
+            log_received_msg(msg_received, client_port)
         if self.is_base_ack(ack_number):
             print("Moving send window."
                   + f"Current send base: {self.send_base}")
@@ -107,7 +108,7 @@ class SelectiveRepeatProtocol:
                 continue
 
     def receive(self, decoded_msg, port, file_controller, server_address=None):
-        print("Waiting for ack", self.rcv_base)
+        logging.debug(f"Waiting for ack {self.rcv_base}")
         if decoded_msg.seq_number == self.rcv_base:
             self.process_expected_packet(decoded_msg, port, file_controller, server_address=server_address)
         elif self.packet_is_within_window(decoded_msg):
@@ -259,7 +260,7 @@ class SelectiveRepeatProtocol:
             data = f_controller.read()
             file_size -= data_length
 
-        ack_thread.join(timeout=10)  # TODO revisar
+        ack_thread.join(timeout=10)
         f_controller.close()
 
     def move_rcv_window(self, shift):
@@ -283,7 +284,7 @@ class SelectiveRepeatProtocol:
         while not succesfully_acked:
             try:
                 ack_queue.get(block=True, timeout=TIMEOUT)
-                print(f"[THREAD for ACK {ack_number}] succesfully acked")
+                logging.debug(f"[THREAD for ACK {ack_number}] succesfully acked")
                 succesfully_acked = True
             except Empty:
                 if tries == MAX_ACK_RESEND_TRIES:
@@ -305,10 +306,10 @@ class SelectiveRepeatProtocol:
     def receive_file(self, first_encoded_msg,
                      file_path, client_port=LOCAL_PORT, msg_queue=None, server_address=None):
         f_controller = FileController.from_file_name(file_path, WRITE_MODE)
-        self.socket.settimeout(None)
+        self.socket.settimeout(5)
+        # para cuando se desconecta un cliente rependtinamente
         encoded_messge = first_encoded_msg
         decoded_message = Message.decode(encoded_messge)
-
         while decoded_message.flags != CLOSE.encoded:
             self.receive(decoded_message, client_port, f_controller, server_address=server_address)
             # encoded_messge = receive_msg(msg_queue, self.socket)
@@ -317,8 +318,8 @@ class SelectiveRepeatProtocol:
         
         if server_address:
             self.socket.sendto(Message.close_ack_msg(decoded_message.command),
-                           server_address)
+                        server_address)
         else:
             self.socket.sendto(Message.close_ack_msg(decoded_message.command),
-                           (LOCAL_HOST, client_port))
+                        (LOCAL_HOST, client_port))
         f_controller.close()

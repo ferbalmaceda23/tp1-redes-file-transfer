@@ -23,7 +23,7 @@ DEFAULT_FOLDER = 'saved-files'
 ERROR_EXISTING_FILE = "File already exists"
 
 WINDOW_RECEIVER_SIZE = 40
-MAX_WINDOW_SIZE = 20
+MAX_WINDOW_SIZE = 30
 
 
 DOWNLOADS_DIR = "downloads"
