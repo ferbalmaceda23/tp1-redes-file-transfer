@@ -86,7 +86,6 @@ class Server:
         self.protocols_lock.acquire()
         self.protocols[client_port] = protocol(transfer_socket)
         self.protocols_lock.release()
-
         #self.protocol = self.protocol(transfer_socket)
         self.send_hi_ack(client_address, decoded_msg, transfer_socket)
 

@@ -36,6 +36,8 @@ def download(client, args):
 def show_server_files(client):
     msg_to_send = Message(Command.DOWNLOAD, LIST, 0, "", b"")
     client.send(msg_to_send.encode())
+    msg_to_send = Message(Command.DOWNLOAD, LIST, 0, "", b"")
+    client.send(msg_to_send.encode(), client.server_address)
 
 
 def download_using_protocol(client, args):
@@ -45,10 +47,8 @@ def download_using_protocol(client, args):
     retries = 0
     while retries < MAX_TIMEOUT_RETRIES:
         try:
-            print("[<<>>] server address=", client.server_address)
             client.send(msg_to_send, client.server_address)
             encoded_messge, sa = client.receive()
-            print(f"sa={sa} server_address={client.server_address}")
             break
         except socket.timeout:
             logging.error("Download timeout! Retrying...")
@@ -63,7 +63,6 @@ def download_using_protocol(client, args):
         logging.error(decoded_msg.data)
         sys.exit(1)
 
-    print("yendo al protocolo")
     file_name = get_file_name(DOWNLOADS_DIR, args.dst)
     client.protocol.receive_file(first_encoded_msg=encoded_messge,
                                  file_path=file_name,

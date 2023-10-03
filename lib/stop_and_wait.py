@@ -44,7 +44,6 @@ class StopAndWaitProtocol():
         if self.ack_num > decoded_msg.seq_number + 1:
             log_received_msg(decoded_msg, port)
             if transfer_socket:
-                print("using transfer socket")
                 ack_msg = Message.ack_msg(decoded_msg.command, decoded_msg.seq_number + 1)
                 transfer_socket.sendto(ack_msg, (LOCAL_HOST, port))
             else:
@@ -60,10 +59,12 @@ class StopAndWaitProtocol():
                 send_ack(decoded_msg.command, port, self.ack_num, self.socket)
             self.ack_num += 1
 
+    """
     def send_error(self, command, port, error_msg):
         msg = Message.error_msg(command, error_msg)
         self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
         log_sent_msg(msg, self.seq_num)
+    """
 
     def send(self, command, port, data, file_controller, msg_queue=None, server_address=None):
         if self.tries_send >= MAX_TIMEOUT_RETRIES:
@@ -73,14 +74,15 @@ class StopAndWaitProtocol():
         msg = Message(command, NO_FLAGS, len(data),
                       file_controller.file_name, data, self.seq_num, 0)
         if server_address:
-            print("[<<->>] server_address=", server_address)
             self.socket.sendto(msg.encode(), server_address)
         else:
-            print(f"usando socket del protocolo hacia cliente {port}")
             self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
 
-        log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
+        if command == Command.DOWNLOAD:
+            log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
+        # log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
 
+        self.socket.settimeout(TIMEOUT)
         try:
             encoded_message = receive_msg(None, self.socket, TIMEOUT)
             if Message.decode(encoded_message).ack_number <= self.seq_num:
@@ -108,7 +110,7 @@ class StopAndWaitProtocol():
         while file_size > 0:
             data_length = len(data)
             try:
-                self.send(command, client_port, data, f_controller, server_address)
+                self.send(command, client_port, data, f_controller, server_address=server_address)
                 #sleep(1.5)
             except DuplicatedACKError:
                 continue
@@ -133,7 +135,6 @@ class StopAndWaitProtocol():
         self.socket.settimeout(None)
         encoded_messge = None
         if first_encoded_msg:
-            print("uso first encoded msg")
             encoded_messge = first_encoded_msg
         else:
             encoded_messge = self.socket.recvfrom(BUFFER_SIZE)[0]

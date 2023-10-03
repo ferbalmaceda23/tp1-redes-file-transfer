@@ -2,7 +2,7 @@ import logging
 import socket
 from threading import Thread, Lock
 from lib.commands import Command
-from lib.constants import DATA_SIZE, LOCAL_HOST, MAX_TIMEOUT_RETRIES, TIMEOUT, WRITE_MODE
+from lib.constants import BUFFER_SIZE, DATA_SIZE, LOCAL_HOST, MAX_TIMEOUT_RETRIES, TIMEOUT, WRITE_MODE
 from lib.constants import LOCAL_PORT, READ_MODE, SELECTIVE_REPEAT
 from lib.constants import MAX_WINDOW_SIZE, MAX_ACK_RESEND_TRIES
 from lib.exceptions import WindowFullError
@@ -30,13 +30,14 @@ class SelectiveRepeatProtocol:
         self.acks_received = 0
 
     # Receives acks in client from server
-    def receive_acks(self, msq_queue, client_port, command):
+    def receive_acks(self, msq_queue, client_port, command, server_address=None):
         continue_receiving = True
         tries = 0
+        self.socket.settimeout(1.5)
         while continue_receiving:
             try:
-                maybe_ack = None
-                maybe_ack = receive_msg(msq_queue, self.socket, 1.5)
+                #maybe_ack = receive_msg(msq_queue, self.socket, 1.5)
+                maybe_ack = self.socket.recvfrom(2048)[0]
                 msg_received = Message.decode(maybe_ack)
                 if msg_received.flags == ACK.encoded:
                     self.receive_ack_and_join_ack_thread(client_port,
@@ -53,7 +54,7 @@ class SelectiveRepeatProtocol:
             except Exception as e:
                 logging.error(f"Error receiving acks: {e}")
         logging.debug("Sending close msg")
-        self.send_close_and_wait_ack(msq_queue, client_port, command)
+        self.send_close_and_wait_ack(msq_queue, client_port, command, server_address=server_address)
 
     def receive_ack_and_join_ack_thread(self, client_port, msg_received):
         ack_number = msg_received.ack_number
@@ -69,11 +70,14 @@ class SelectiveRepeatProtocol:
         else:
             logging.debug(f"Received messy ACK: {ack_number}")
 
-    def send_close_and_wait_ack(self, msq_queue, client_port, command):
+    def send_close_and_wait_ack(self, msq_queue, client_port, command, server_address=None):
         close_tries = 0
         while close_tries < MAX_TIMEOUT_RETRIES:
             try:
-                send_close(self.socket, command,
+                if server_address:
+                    send_close(self.socket, command, server_address)
+                else:
+                    send_close(self.socket, command,
                            (LOCAL_HOST, client_port))
                 maybe_close_ack = receive_msg(msq_queue, self.socket, 1.5)
                 if Message.decode(maybe_close_ack).flags == CLOSE_ACK.encoded:
@@ -102,48 +106,56 @@ class SelectiveRepeatProtocol:
             except KeyError:
                 continue
 
-    def receive(self, decoded_msg, port, file_controller, transfer_socket=None):
+    def receive(self, decoded_msg, port, file_controller, server_address=None):
         print("Waiting for ack", self.rcv_base)
-
         if decoded_msg.seq_number == self.rcv_base:
-            self.process_expected_packet(decoded_msg, port, file_controller)
+            self.process_expected_packet(decoded_msg, port, file_controller, server_address=server_address)
         elif self.packet_is_within_window(decoded_msg):
-            self.buffer_packet(decoded_msg, port)
+            self.buffer_packet(decoded_msg, port, server_address=server_address)
         elif self.already_acknowledged(decoded_msg):
             # client lost ack, send ack again
-            self.send_duplicated_ack(decoded_msg, port)
+            self.send_duplicated_ack(decoded_msg, port, server_address=server_address)
         else:
             # otherwise it is not within the window and it is discarded
             logging.error(f"Window starts at {self.rcv_base}"
                           + f" & ends at {self.rcv_base + self.window_size-1}")
             logging.error(f"Msg out of window: {decoded_msg.seq_number}")
 
-    def process_expected_packet(self, decoded_msg, port, file_controller):
+    def process_expected_packet(self, decoded_msg, port, file_controller, server_address=None):
         logging.debug("Received expected sqn")
         self.write_to_file(file_controller, decoded_msg)
         log_received_msg(decoded_msg, port)
         self.process_buffer(file_controller)
         seq_num = decoded_msg.seq_number
         logging.debug(f"Sending ACK: {seq_num}")
-        send_ack(decoded_msg.command, port, seq_num, self.socket)
+        if server_address:
+            send_ack(decoded_msg.command, server_address[1], seq_num, self.socket)
+        else:
+            send_ack(decoded_msg.command, port, seq_num, self.socket)
         self.seq_num += 1
 
     def already_acknowledged(self, decoded_msg):
         return decoded_msg.seq_number < self.rcv_base
 
-    def send_duplicated_ack(self, decoded_msg, port):
+    def send_duplicated_ack(self, decoded_msg, port, server_address=None):
         seq_num = decoded_msg.seq_number
         logging.debug(f"Message was already acked: {seq_num}")
-        send_ack(decoded_msg.command, port, seq_num, self.socket)
+        if server_address:
+            send_ack(decoded_msg.command, server_address[1], seq_num, self.socket)
+        else:
+            send_ack(decoded_msg.command, port, seq_num, self.socket)
 
-    def buffer_packet(self, decoded_msg, port):
+    def buffer_packet(self, decoded_msg, port, server_address=None):
         log_received_msg(decoded_msg, port)
         seq_num = decoded_msg.seq_number
         logging.debug(f"Received msg: {seq_num}")
         if self.ack_is_not_repeated(decoded_msg):
             self.buffer.append(decoded_msg)
         logging.debug(f"Sending ACK: {seq_num}")
-        send_ack(decoded_msg.command, port, seq_num, self.socket)
+        if server_address:
+            send_ack(decoded_msg.command, server_address[1], seq_num, self.socket)
+        else:
+            send_ack(decoded_msg.command, port, seq_num, self.socket)
 
     def ack_is_not_repeated(self, decoded_msg):
         unique_sqns = [x.seq_number for x in self.buffer]
@@ -179,7 +191,7 @@ class SelectiveRepeatProtocol:
         is_after_base = decoded_msg.seq_number > self.rcv_base
         return is_after_base and is_before_max
 
-    def send(self, command, port, data, file_controller):
+    def send(self, command, port, data, file_controller, server_address=None):
         if self.window_is_not_full():
             msg = Message(
                 command,
@@ -190,21 +202,27 @@ class SelectiveRepeatProtocol:
                 self.seq_num,
                 0,
             )
-            self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
-            self.spawn_packet_ack_thread(port, msg)
+            if server_address:
+                self.socket.sendto(msg.encode(), server_address)
+            else:
+                self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
+            self.spawn_packet_ack_thread(port, msg, server_address=server_address)
             log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
             self.seq_num += 1
             self.modify_not_acknowledged(1)
         else:
             raise WindowFullError
+        
+        if command == Command.UPLOAD:
+            log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
 
     def window_is_not_full(self):
         return self.not_acknowledged < self.window_size
 
-    def spawn_packet_ack_thread(self, port, msg):
+    def spawn_packet_ack_thread(self, port, msg, server_address=None):
         ack_queue = Queue()
         self.acks_map[self.seq_num] = ack_queue
-        args = (self.seq_num, ack_queue, msg.encode(), port)
+        args = (self.seq_num, ack_queue, msg.encode(), port, server_address)
         wait_ack_thread = Thread(target=self.wait_for_ack, args=args)
         wait_ack_thread.start()
         self.thread_pool[self.seq_num] = wait_ack_thread
@@ -216,7 +234,7 @@ class SelectiveRepeatProtocol:
         self.not_acknowledged_lock.release()
 
     def send_file(self, args=None, msg_queue=None,
-                  client_port=LOCAL_PORT, file_path=None):
+                  client_port=LOCAL_PORT, file_path=None, server_address=None):
         f_controller = None
         command = Command.UPLOAD
         if file_path:
@@ -229,13 +247,13 @@ class SelectiveRepeatProtocol:
         self.set_window_size(int(file_size / DATA_SIZE))
         data = f_controller.read()
         ack_thread = Thread(target=self.receive_acks,
-                            args=(msg_queue, client_port, command))
+                            args=(msg_queue, client_port, command, server_address))
         ack_thread.start()
 
         while file_size > 0:
             data_length = len(data)
             try:
-                self.send(command, client_port, data, f_controller)
+                self.send(command, client_port, data, f_controller, server_address=server_address)
             except WindowFullError:
                 continue
             data = f_controller.read()
@@ -258,7 +276,7 @@ class SelectiveRepeatProtocol:
     def calculate_window_size(self, number_of_packets):
         return min(int(number_of_packets / 2), MAX_WINDOW_SIZE)
 
-    def wait_for_ack(self, ack_number, ack_queue, encoded_msg, port):
+    def wait_for_ack(self, ack_number, ack_queue, encoded_msg, port, server_address=None):
         logging.info(f"Wating for ack {ack_number}")
         succesfully_acked = False
         tries = 1
@@ -276,22 +294,31 @@ class SelectiveRepeatProtocol:
                     msg = Message.decode(encoded_msg)
                     try:
                         logging.debug(f"Sending msg back to server: {msg}")
-                        self.socket.sendto(encoded_msg, (LOCAL_HOST, port))
+                        if server_address:
+                            self.socket.sendto(encoded_msg, server_address)
+                        else:
+                            self.socket.sendto(encoded_msg, (LOCAL_HOST, port))
                     except Exception as e:
                         logging.error(f"Error sending msg back to server: {e}")
                     tries += 1
 
     def receive_file(self, first_encoded_msg,
-                     file_path, client_port=LOCAL_PORT, msg_queue=None):
+                     file_path, client_port=LOCAL_PORT, msg_queue=None, server_address=None):
         f_controller = FileController.from_file_name(file_path, WRITE_MODE)
         self.socket.settimeout(None)
         encoded_messge = first_encoded_msg
         decoded_message = Message.decode(encoded_messge)
 
         while decoded_message.flags != CLOSE.encoded:
-            self.receive(decoded_message, client_port, f_controller)
-            encoded_messge = receive_msg(msg_queue, self.socket)
+            self.receive(decoded_message, client_port, f_controller, server_address=server_address)
+            # encoded_messge = receive_msg(msg_queue, self.socket)
+            encoded_messge = self.socket.recvfrom(BUFFER_SIZE)[0]
             decoded_message = Message.decode(encoded_messge)
-        self.socket.sendto(Message.close_ack_msg(decoded_message.command),
+        
+        if server_address:
+            self.socket.sendto(Message.close_ack_msg(decoded_message.command),
+                           server_address)
+        else:
+            self.socket.sendto(Message.close_ack_msg(decoded_message.command),
                            (LOCAL_HOST, client_port))
         f_controller.close()
