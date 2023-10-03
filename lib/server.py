@@ -181,8 +181,7 @@ class Server:
         try:
             protocol.receive_file(first_encoded_msg=msg,
                                   client_port=client_port,
-                                  file_path=file_name,
-                                  msg_queue=client_msg_queue)
+                                  file_path=file_name)
             logging.info(f"File {file_name} uploaded, closing connection")
         except timeout:
             logging.error("Timeout on client")
