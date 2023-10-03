@@ -76,12 +76,13 @@ class StopAndWaitProtocol():
             print("[<<->>] server_address=", server_address)
             self.socket.sendto(msg.encode(), server_address)
         else:
+            print(f"usando socket del protocolo hacia cliente {port}")
             self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
 
         log_sent_msg(msg, self.seq_num, file_controller.get_file_size())
 
         try:
-            encoded_message = receive_msg(msg_queue, self.socket, TIMEOUT)
+            encoded_message = receive_msg(None, self.socket, TIMEOUT)
             if Message.decode(encoded_message).ack_number <= self.seq_num:
                 logging.info(f"Client {port}: received duplicated ACK")
                 raise DuplicatedACKError
@@ -107,7 +108,7 @@ class StopAndWaitProtocol():
         while file_size > 0:
             data_length = len(data)
             try:
-                self.send(command, client_port, data, f_controller, msg_queue, server_address)
+                self.send(command, client_port, data, f_controller, server_address)
                 #sleep(1.5)
             except DuplicatedACKError:
                 continue
@@ -126,19 +127,31 @@ class StopAndWaitProtocol():
                                 server_address=server_address)
         f_controller.close()
 
-    def receive_file(self, first_encoded_msg,
-                     file_path, client_port=LOCAL_PORT, msg_queue=None):
+    def receive_file(self,
+                     file_path, client_port=LOCAL_PORT, msg_queue=None, first_encoded_msg=None, server_address=None):
         f_controller = FileController.from_file_name(file_path, WRITE_MODE)
         self.socket.settimeout(None)
-        #encoded_messge = first_encoded_msg
-        encoded_messge = self.socket.recvfrom(BUFFER_SIZE)[0]
+        encoded_messge = None
+        if first_encoded_msg:
+            print("uso first encoded msg")
+            encoded_messge = first_encoded_msg
+        else:
+            encoded_messge = self.socket.recvfrom(BUFFER_SIZE)[0]
         decoded_message = Message.decode(encoded_messge)
 
         while decoded_message.flags != CLOSE.encoded:
-            self.receive(decoded_message, client_port, f_controller, transfer_socket=self.socket)
+            if server_address:
+                self.receive(decoded_message, server_address[1], f_controller, transfer_socket=self.socket)
+            else:
+                self.receive(decoded_message, client_port, f_controller, transfer_socket=self.socket)
             #encoded_messge = receive_msg(msg_queue, self.socket)
             encoded_messge = self.socket.recvfrom(BUFFER_SIZE)[0]
             decoded_message = Message.decode(encoded_messge)
-        self.socket.sendto(Message.close_ack_msg(decoded_message.command),
+        
+        if server_address:
+            self.socket.sendto(Message.close_ack_msg(decoded_message.command),
+                           server_address)
+        else:
+            self.socket.sendto(Message.close_ack_msg(decoded_message.command),
                            (LOCAL_HOST, client_port))
         f_controller.close()

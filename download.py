@@ -45,8 +45,10 @@ def download_using_protocol(client, args):
     retries = 0
     while retries < MAX_TIMEOUT_RETRIES:
         try:
-            client.send(msg_to_send)
-            encoded_messge, _ = client.receive()
+            print("[<<>>] server address=", client.server_address)
+            client.send(msg_to_send, client.server_address)
+            encoded_messge, sa = client.receive()
+            print(f"sa={sa} server_address={client.server_address}")
             break
         except socket.timeout:
             logging.error("Download timeout! Retrying...")
@@ -61,9 +63,11 @@ def download_using_protocol(client, args):
         logging.error(decoded_msg.data)
         sys.exit(1)
 
+    print("yendo al protocolo")
     file_name = get_file_name(DOWNLOADS_DIR, args.dst)
     client.protocol.receive_file(first_encoded_msg=encoded_messge,
-                                 file_path=file_name)
+                                 file_path=file_name,
+                                 server_address=client.server_address)
     logging.info("Download finished")
 
 

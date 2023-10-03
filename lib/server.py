@@ -141,23 +141,33 @@ class Server:
 
     def handle_download(self, client_address, msg_queue, transfer_socket):
         client_port = client_address[1]
-        msg = self.dequeue_decoded_msg(msg_queue)
+        # msg = self.dequeue_decoded_msg(msg_queue)
+        e_msg = transfer_socket.recvfrom(BUFFER_SIZE)[0]
+        msg = Message.decode(e_msg)
         command = msg.command
+
+        self.protocols_lock.acquire()
+        protocol = self.protocols[client_port]
+        self.protocols_lock.release()
 
         if msg.flags == LIST.encoded:
             self.send_file_list(client_address)
         else:
             file_path = os.path.join(self.storage, msg.file_name)
             if not os.path.exists(file_path):
-                send_error(self.socket, command, client_port,
+                send_error(transfer_socket, command, client_port,
                            ERROR_EXISTING_FILE)
                 logging.error(f"File {msg.file_name} doesn't exist, try again")
                 return
 
             try:
-                self.protocol.send_file(msg_queue=msg_queue,
+                """
+                protocol.send_file(msg_queue=msg_queue,
                                         client_port=client_port,
                                         file_path=file_path)
+                self.close_client_connection(client_address)
+                """
+                protocol.send_file(client_port=client_port, file_path=file_path)
                 self.close_client_connection(client_address)
             except TimeoutsRetriesExceeded:
                 logging.error("Timeouts retries exceeded")
