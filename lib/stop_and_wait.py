@@ -6,7 +6,7 @@ from lib.file_controller import FileController
 from lib.flags import CLOSE, NO_FLAGS
 from lib.constants import LOCAL_HOST, LOCAL_PORT, TIMEOUT
 from lib.constants import MAX_TIMEOUT_RETRIES, WRITE_MODE
-from lib.constants import READ_MODE, STOP_AND_WAIT
+from lib.constants import READ_MODE, STOP_AND_WAIT, MAX_FILE_SIZE
 from lib.message import Message
 from lib.exceptions import DuplicatedACKError, TimeoutsRetriesExceeded
 from lib.message_utils import receive_msg, send_ack, send_close_and_wait_ack
@@ -84,6 +84,10 @@ class StopAndWaitProtocol():
                                                     args.name, READ_MODE)
         data = f_controller.read()
         file_size = f_controller.get_file_size()
+        if file_size > MAX_FILE_SIZE:
+            logging.error(f"File size exceeds max file size: {file_size}")
+            send_close_and_wait_ack(self.socket, msg_queue, client_port, command)
+            return 
         while file_size > 0:
             data_length = len(data)
             try:
@@ -99,7 +103,7 @@ class StopAndWaitProtocol():
             file_size -= data_length
 
         send_close_and_wait_ack(socket_=self.socket,
-                                msq_queue=msg_queue,
+                                msg_queue=msg_queue,
                                 client_port=client_port,
                                 command=Command.DOWNLOAD)
         f_controller.close()

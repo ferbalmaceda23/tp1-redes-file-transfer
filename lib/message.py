@@ -124,5 +124,5 @@ class Message:
 
     @classmethod
     def error_msg(cls, command, error_msg):
-        msg = Message(command, ERROR, EMPTY_FILE, "", data=error_msg.encode())
-        return msg.encode()
+        return Message(command, ERROR, len(error_msg), "", data=error_msg.encode()).encode()
+

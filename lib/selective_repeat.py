@@ -2,13 +2,13 @@ import logging
 import socket
 from threading import Thread, Lock
 from lib.commands import Command
-from lib.constants import DATA_SIZE, LOCAL_HOST, MAX_TIMEOUT_RETRIES, TIMEOUT, WRITE_MODE
+from lib.constants import DATA_SIZE, LOCAL_HOST, MAX_TIMEOUT_RETRIES, TIMEOUT, WINDOW_RECEIVER_SIZE, WRITE_MODE
 from lib.constants import LOCAL_PORT, READ_MODE, SELECTIVE_REPEAT
-from lib.constants import MAX_WINDOW_SIZE, MAX_ACK_RESEND_TRIES
+from lib.constants import MAX_WINDOW_SIZE, MAX_ACK_RESEND_TRIES, MAX_FILE_SIZE
 from lib.exceptions import WindowFullError
 from lib.file_controller import FileController
-from lib.flags import ACK, CLOSE, CLOSE_ACK, NO_FLAGS
-from lib.message_utils import receive_encoded_from_socket, receive_msg, send_ack, send_close
+from lib.flags import ACK, CLOSE, NO_FLAGS
+from lib.message_utils import receive_msg, send_ack, send_close_and_wait_ack
 from lib.log import log_received_msg, log_sent_msg
 from lib.message import Message
 from queue import Queue, Empty
@@ -21,7 +21,7 @@ class SelectiveRepeatProtocol:
         self.name = SELECTIVE_REPEAT
         self.send_base = 0  # it is the first packet in the window == its sqn
         self.rcv_base = 0
-        self.window_size = 6  # TODO revisar
+        self.window_size = WINDOW_RECEIVER_SIZE
         self.buffer = []
         self.not_acknowledged = 0  # n° packets sent but not acknowledged yet
         self.not_acknowledged_lock = Lock()
@@ -30,13 +30,13 @@ class SelectiveRepeatProtocol:
         self.acks_received = 0
 
     # Receives acks in client from server
-    def receive_acks(self, msq_queue, client_port, command):
+    def receive_acks(self, msg_queue, client_port, command):
         continue_receiving = True
         tries = 0
         while continue_receiving:
             try:
                 maybe_ack = None
-                maybe_ack = receive_msg(msq_queue, self.socket, 1.5)
+                maybe_ack = receive_msg(msg_queue, self.socket, 1.5)
                 msg_received = Message.decode(maybe_ack)
                 if msg_received.flags == ACK.encoded:
                     self.receive_ack_and_join_ack_thread(client_port,
@@ -53,7 +53,7 @@ class SelectiveRepeatProtocol:
             except Exception as e:
                 logging.error(f"Error receiving acks: {e}")
         logging.debug("Sending close msg")
-        self.send_close_and_wait_ack(msq_queue, client_port, command)
+        send_close_and_wait_ack(msg_queue, client_port, command,  1.5)
 
     def receive_ack_and_join_ack_thread(self, client_port, msg_received):
         ack_number = msg_received.ack_number
@@ -68,19 +68,6 @@ class SelectiveRepeatProtocol:
             self.move_send_window()
         else:
             logging.debug(f"Received messy ACK: {ack_number}")
-
-    def send_close_and_wait_ack(self, msq_queue, client_port, command):
-        close_tries = 0
-        while close_tries < MAX_TIMEOUT_RETRIES:
-            try:
-                send_close(self.socket, command,
-                           (LOCAL_HOST, client_port))
-                maybe_close_ack = receive_msg(msq_queue, self.socket, 1.5)
-                if Message.decode(maybe_close_ack).flags == CLOSE_ACK.encoded:
-                    logging.debug("Received close ACK")
-                break
-            except (socket.timeout, Empty):
-                close_tries += 1
 
     def is_base_ack(self, ack_number):
         return ack_number == self.send_base
@@ -226,6 +213,11 @@ class SelectiveRepeatProtocol:
             f_controller = FileController.from_args(args.src,
                                                     args.name, READ_MODE)
         file_size = f_controller.get_file_size()
+        if file_size > MAX_FILE_SIZE:
+            logging.error(f"File size exceeds max file size: {file_size}")
+            send_close_and_wait_ack(msg_queue, client_port, command,  1.5)
+            return 
+        
         self.set_window_size(int(file_size / DATA_SIZE))
         data = f_controller.read()
         ack_thread = Thread(target=self.receive_acks,

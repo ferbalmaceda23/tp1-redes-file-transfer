@@ -19,11 +19,10 @@ def download(client, args):
         print("Server will show files...")
         show_server_files(client)
         sys.exit(0)
-
+    
     try:
         if not os.path.isdir(DOWNLOADS_DIR):
             os.makedirs(DOWNLOADS_DIR, exist_ok=True)
-
         download_using_protocol(client, args)
     except ServerConnectionError:
         logging.error("Server is offline")
