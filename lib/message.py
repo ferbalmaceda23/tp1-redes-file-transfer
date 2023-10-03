@@ -1,8 +1,8 @@
 import logging
-from lib.flags import ACK, CLOSE, HI, HI_ACK, NO_FLAGS, ERROR, Flag
+from lib.flags import ACK, CLOSE, CLOSE_ACK, HI, HI_ACK, NO_FLAGS, ERROR, Flag
 from lib.commands import Command
 from lib.constants import BUFFER_SIZE, EMPTY_DATA, EMPTY_FILE
-import time
+
 
 def add_padding(data: bytes, n: int):
     k = n - len(data)
@@ -13,7 +13,7 @@ def add_padding(data: bytes, n: int):
 
 """
 command: [DOWNLOAD, UPLOAD]
-flags: [HI, CLOSE, ACK, CORRUPTED_PACKAGE]
+flags: [HI, CLOSE, ACK, CLOSE_ACK, HI_ACK, ERROR, NO_FLAGS, LIST]
 file_length: [int]
 file_path: [str]
 file_name: [str]
@@ -109,7 +109,8 @@ class Message:
 
     @classmethod
     def hi_msg(cls, command, protocol):
-        return Message(command, HI, len(protocol.name.encode()), "", protocol.name.encode()).encode()
+        return Message(command, HI, len(protocol.name.encode()), "",
+                       protocol.name.encode()).encode()
 
     @classmethod
     def download_msg(cls, file_name):
@@ -118,6 +119,10 @@ class Message:
         return msg.encode()
 
     @classmethod
+    def close_ack_msg(cls, command):
+        return Message(command, CLOSE_ACK, EMPTY_FILE, "", EMPTY_DATA).encode()
+
+    @classmethod
     def error_msg(cls, command, error_msg):
-        msg = Message(command, ERROR, EMPTY_FILE, error_msg, EMPTY_DATA)
+        msg = Message(command, ERROR, EMPTY_FILE, "", data=error_msg.encode())
         return msg.encode()

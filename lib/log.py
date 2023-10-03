@@ -48,7 +48,7 @@ def prepare_logging(args):
 def log_received_msg(msg, port):
     logging.info(
         f"Client {port}: received {len(msg.data)}"
-        + f" bytes, seq_number: {msg.seq_number}"
+        + f" bytes, package number: {msg.seq_number}"
     )
 
 

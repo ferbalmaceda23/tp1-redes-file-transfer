@@ -11,8 +11,10 @@ class Flag:
             8: "HI",
             10: "HI_ACK",
             4: "CLOSE",
+            3: "ERROR",
+            6: "CLOSE_ACK",
+            5: "LIST",
             2: "ACK",
-            1: "CORRUPTED_PACKAGE",
             0: "NO_FLAGS"
         }
         return flags_dict.get(self.encoded, "UNKNOWN FLAG")
@@ -21,10 +23,11 @@ class Flag:
         return self.encoded.to_bytes(1, byteorder='big')
 
 
+CLOSE_ACK = Flag(6)
 HI_ACK = Flag(10)
 CLOSE = Flag(4)
 HI = Flag(8)
 ERROR = Flag(3)
 ACK = Flag(2)
-CORRUPTED_PACKAGE = Flag(1)
 NO_FLAGS = Flag(0)
+LIST = Flag(5)

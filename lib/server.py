@@ -1,17 +1,19 @@
 import logging
 import os
-from queue import Queue, Empty
-from lib.exceptions import DuplicatedACKError
+from queue import Queue
+from lib.exceptions import TimeoutsRetriesExceeded
 from lib.file_controller import FileController
-from socket import socket, AF_INET, SOCK_DGRAM
+from socket import socket, AF_INET, SOCK_DGRAM, timeout
 from threading import Thread
-from lib.constants import READ_MODE, BUFFER_SIZE, TIMEOUT
+from lib.constants import LOCAL_HOST
+from lib.constants import BUFFER_SIZE, TIMEOUT
 from lib.constants import WRITE_MODE, DEFAULT_FOLDER, ERROR_EXISTING_FILE
-from lib.flags import HI, HI_ACK, CLOSE
+from lib.flags import HI, HI_ACK, CLOSE, LIST
 from lib.commands import Command
 from lib.message import Message
-from lib.selective_repeat import SelectiveRepeatProtocol
 from lib.utils import get_file_name, select_protocol
+from lib.message_utils import send_close, send_error
+from threading import Lock
 
 
 class Server:
@@ -19,7 +21,9 @@ class Server:
         self.ip = ip
         self.port = port
         self.clients = {}
-        self.protocol = None
+        #self.protocol = None
+        self.protocols = {}
+        self.protocols_lock = Lock()
         storage = args.storage
         self.storage = storage if storage is not None else DEFAULT_FOLDER
 
@@ -50,18 +54,20 @@ class Server:
                 self.clients[client_port] = client_msg_queue
                 args = (encoded_message, client_address, client_msg_queue)
                 try:
-                    Thread(target=self.handle_client_message, args=args).start()
+                    client = Thread(target=self.handle_client_message,
+                                    args=args)
+                    client.start()
                 except Exception as e:
                     logging.error(f"Error in thread {e}")
-
 
     def handle_client_message(self, encoded_msg, client_address, msg_queue):
         try:
             encoded_msg = msg_queue.get(block=True, timeout=TIMEOUT)
             decoded_msg = Message.decode(encoded_msg)
             if decoded_msg.flags == HI.encoded:
-                self.three_way_handshake(client_address, msg_queue, decoded_msg)
-        except Exception as e: # possible Empty exception
+                self.three_way_handshake(client_address, msg_queue,
+                                         decoded_msg)
+        except Exception as e:  # possible Empty exception
             logging.error(f"Error handling client message: {e}")
             raise e
 
@@ -72,35 +78,44 @@ class Server:
             f"Client {client_port}: wants to connect, sending confirmation, "
             + f"message type: {decoded_msg.command}. Protocol: {protocol_RDT}"
         )
-        self.protocol = select_protocol(protocol_RDT)
-        self.protocol = self.protocol(self.socket)
-        self.send_HI_ACK(client_address, decoded_msg)
-        
+
+        transfer_socket = socket(AF_INET, SOCK_DGRAM)
+        protocol = select_protocol(protocol_RDT)
+        self.protocols_lock.acquire()
+        self.protocols[client_port] = protocol(transfer_socket)
+        self.protocols_lock.release()
+        #self.protocol = self.protocol(transfer_socket)
+        self.send_hi_ack(client_address, decoded_msg, transfer_socket)
+
         try:
-            print("Antres del queue block en el handshake")
-            encoded_message = msg_queue.get(block=True)
+            #encoded_message = msg_queue.get(block=True)
+            encoded_message = transfer_socket.recvfrom(BUFFER_SIZE)[0]
             decoded_msg = Message.decode(encoded_message)
-            print("Despues del queue block en el handshake")
             if decoded_msg.flags == HI_ACK.encoded:
                 self.init_file_transfer_operation(
-                    msg_queue, decoded_msg, client_address
+                    msg_queue, decoded_msg, client_address, transfer_socket
                 )
             else:
                 self.close_client_connection(client_address)
         except Exception as e:
             del self.clients[client_port]
             logging.error(f"Client {client_port}: {e}")
-            logging.info(f"Client {client_port}: handshake timeout." +
-                         " Closing connection.")
+            logging.info(
+                f"Client {client_port}: handshake timeout." +
+                " Closing connection."
+            )
             raise e
-           
+
     def close_client_connection(self, client_address):
         client_port = client_address[1]
         del self.clients[client_port]
-        logging.info(f"Client {client_port}: Timeout or unknown message")
+        self.protocols_lock.acquire()
+        del self.protocols[client_port]
+        self.protocols_lock.release()
+        logging.info(f"Client {client_port}: closing connection...")
 
     def init_file_transfer_operation(
-        self, client_msg_queue, decoded_msg, client_address
+        self, client_msg_queue, decoded_msg, client_address, transfer_socket
     ):
         client_port = client_address[1]
         logging.info(
@@ -109,77 +124,74 @@ class Server:
         )
         self.clients[client_port] = client_msg_queue
         if decoded_msg.command == Command.DOWNLOAD:
-            self.handle_download(client_address, client_msg_queue)
+            self.handle_download(client_address, client_msg_queue, transfer_socket)
         elif decoded_msg.command == Command.UPLOAD:
-            self.handle_upload(client_port, client_msg_queue)
+            self.handle_upload(client_address, client_msg_queue, transfer_socket)
         else:
-            logging.info(
-                f"Client {client_port}: unknown command " + "closing connection"
+            logging.error(
+                f"Client {client_port}: unknown command "
+                + "closing connection"
             )
             self.close_client_connection(client_port)
-            self.send_CLOSE(decoded_msg.command, client_address)
+            send_close(self.socket, decoded_msg.command, client_address)
 
-    def send_HI_ACK(self, client_address, decoded_msg):
+    def send_hi_ack(self, client_address, decoded_msg, transfer_socket):
         hi_ack = Message.hi_ack_msg(decoded_msg.command)
-        self.socket.sendto(hi_ack, client_address)
+        transfer_socket.sendto(hi_ack, client_address)
 
-    def send_CLOSE(self, command, client_address):
-        self.socket.sendto(Message.close_msg(command), client_address)
-
-    def handle_download(self, client_address, msg_queue):
+    def handle_download(self, client_address, msg_queue, transfer_socket):
         client_port = client_address[1]
-        msg = self.dequeue_encoded_msg(msg_queue)
+        # msg = self.dequeue_decoded_msg(msg_queue)
+        e_msg = transfer_socket.recvfrom(BUFFER_SIZE)[0]
+        msg = Message.decode(e_msg)
         command = msg.command
 
-        file_path = os.path.join(self.storage, msg.file_name)
-        if not os.path.exists(file_path):
-            self.protocol.send_error(command, client_port, ERROR_EXISTING_FILE)
-            logging.error(f"File {msg.file_name} does not exist, try again")
-            return
-        file_controller = FileController.from_file_name(file_path, READ_MODE)
-        data = file_controller.read()
-        file_size = file_controller.get_file_size()
+        self.protocols_lock.acquire()
+        protocol = self.protocols[client_port]
+        self.protocols_lock.release()
 
-        if type(self.protocol) == SelectiveRepeatProtocol:
-            Thread(target=self.protocol.receive_acks_from_queue, args=(msg_queue)).start()
-            while file_size > 0:
-                self.protocol.send(command, client_port, data, file_controller)
-                file_size -= len(data)
-                data = file_controller.read()
+        if msg.flags == LIST.encoded:
+            self.send_file_list(client_address)
         else:
-            while file_size > 0:
-                data_length = len(data)
-                try:
-                    self.protocol.send(
-                        Command.DOWNLOAD,
-                        client_port,
-                        data,
-                        file_controller,
-                        lambda: self.dequeue_encoded_msg_download(msg_queue),
-                    )
-                except DuplicatedACKError:
-                    logging.error("Duplicated ACK! Retrying...")
-                    continue
-                except Empty:
-                    logging.error("Timeout! Retrying...")
-                    print("Timeout!")
-                    continue
-                data = file_controller.read()
-                file_size -= data_length
+            file_path = os.path.join(self.storage, msg.file_name)
+            if not os.path.exists(file_path):
+                send_error(transfer_socket, command, client_port,
+                           ERROR_EXISTING_FILE)
+                logging.error(f"File {msg.file_name} doesn't exist, try again")
+                return
 
-        self.send_CLOSE(command, client_address)
+            try:
+                protocol.send_file(client_port=client_port, file_path=file_path)
+                self.close_client_connection(client_address)
+            except TimeoutsRetriesExceeded:
+                logging.error("Timeouts retries exceeded")
+                self.close_client_connection(client_address)
 
-    def handle_upload(self, client_port, client_msg_queue):
-        msg = self.dequeue_encoded_msg(client_msg_queue)  # first upload msg
-        file_name = get_file_name(self.storage, msg.file_name)
+    def send_file_list(self, client_address):
+        files = os.listdir(self.storage)
+        print("Server available files:")
+        print(files)
+        self.close_client_connection(client_address)
+
+    def handle_upload(self, client_address, client_msg_queue, transfer_socket):
+        client_port = client_address[1]
+        self.protocols_lock.acquire()
+        protocol = self.protocols[client_port]
+        self.protocols_lock.release()
+        msg = transfer_socket.recvfrom(BUFFER_SIZE)[0]
+        file_name = get_file_name(self.storage, Message.decode(msg).file_name)
         logging.info(f"Uploading file to: {file_name}")
-        file_controller = FileController.from_file_name(file_name, WRITE_MODE)
+        try:
+            protocol.receive_file(first_encoded_msg=msg,
+                                    client_port=client_port,
+                                    file_path=file_name,
+                                    msg_queue=client_msg_queue)
+            logging.info(f"File {file_name} uploaded, closing connection")
+        except timeout:
+            logging.error(f"Timeout on client")
+            self.close_client_connection(client_address)
 
-        while msg.flags != CLOSE.encoded:
-            self.protocol.receive(msg, client_port, file_controller)
-            msg = self.dequeue_encoded_msg(client_msg_queue)
-
-    def dequeue_encoded_msg(self, client_msg_queue):
+    def dequeue_decoded_msg(self, client_msg_queue):
         # Sacamos el timeout de la cola porque en el upload
         # trababa y no funcionaba.
         # Quiza haya que agregarlo para el download, hay que ponerle
@@ -188,7 +200,7 @@ class Server:
         encoded_msg = client_msg_queue.get(block=True)
         return Message.decode(encoded_msg)
 
-    def dequeue_encoded_msg_download(self, client_msg_queue):
+    def dequeue_decoded_msg_download(self, client_msg_queue):
         encoded_msg = client_msg_queue.get(block=True, timeout=TIMEOUT)
 
         return Message.decode(encoded_msg)
