@@ -24,7 +24,8 @@ class Client:
         while hi_tries < MAX_TIMEOUT_RETRIES:
             try:
                 self.send_hi_to_server(command, self.protocol)
-                enconded_message, server_address = self.socket.recvfrom(BUFFER_SIZE)
+                enconded_message, server_address = self.socket.recvfrom(
+                                                               BUFFER_SIZE)
                 self.server_address = server_address
                 maybe_hi_ack = Message.decode(enconded_message)
                 break

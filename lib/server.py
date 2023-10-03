@@ -2,13 +2,11 @@ import logging
 import os
 from queue import Queue
 from lib.exceptions import TimeoutsRetriesExceeded
-from lib.file_controller import FileController
 from socket import socket, AF_INET, SOCK_DGRAM, timeout
 from threading import Thread
-from lib.constants import LOCAL_HOST
 from lib.constants import BUFFER_SIZE, TIMEOUT
-from lib.constants import WRITE_MODE, DEFAULT_FOLDER, ERROR_EXISTING_FILE
-from lib.flags import HI, HI_ACK, CLOSE, LIST
+from lib.constants import DEFAULT_FOLDER, ERROR_EXISTING_FILE
+from lib.flags import HI, HI_ACK, LIST
 from lib.commands import Command
 from lib.message import Message
 from lib.utils import get_file_name, select_protocol
@@ -21,7 +19,6 @@ class Server:
         self.ip = ip
         self.port = port
         self.clients = {}
-        #self.protocol = None
         self.protocols = {}
         self.protocols_lock = Lock()
         storage = args.storage
@@ -84,11 +81,9 @@ class Server:
         self.protocols_lock.acquire()
         self.protocols[client_port] = protocol(transfer_socket)
         self.protocols_lock.release()
-        #self.protocol = self.protocol(transfer_socket)
         self.send_hi_ack(client_address, decoded_msg, transfer_socket)
 
         try:
-            #encoded_message = msg_queue.get(block=True)
             encoded_message = transfer_socket.recvfrom(BUFFER_SIZE)[0]
             decoded_msg = Message.decode(encoded_message)
             if decoded_msg.flags == HI_ACK.encoded:
@@ -124,9 +119,11 @@ class Server:
         )
         self.clients[client_port] = client_msg_queue
         if decoded_msg.command == Command.DOWNLOAD:
-            self.handle_download(client_address, client_msg_queue, transfer_socket)
+            self.handle_download(client_address, client_msg_queue,
+                                 transfer_socket)
         elif decoded_msg.command == Command.UPLOAD:
-            self.handle_upload(client_address, client_msg_queue, transfer_socket)
+            self.handle_upload(client_address, client_msg_queue,
+                               transfer_socket)
         else:
             logging.error(
                 f"Client {client_port}: unknown command "
@@ -141,7 +138,6 @@ class Server:
 
     def handle_download(self, client_address, msg_queue, transfer_socket):
         client_port = client_address[1]
-        # msg = self.dequeue_decoded_msg(msg_queue)
         e_msg = transfer_socket.recvfrom(BUFFER_SIZE)[0]
         msg = Message.decode(e_msg)
         command = msg.command
@@ -161,7 +157,8 @@ class Server:
                 return
 
             try:
-                protocol.send_file(client_port=client_port, file_path=file_path)
+                protocol.send_file(client_port=client_port,
+                                   file_path=file_path)
                 self.close_client_connection(client_address)
             except TimeoutsRetriesExceeded:
                 logging.error("Timeouts retries exceeded")
@@ -183,20 +180,15 @@ class Server:
         logging.info(f"Uploading file to: {file_name}")
         try:
             protocol.receive_file(first_encoded_msg=msg,
-                                    client_port=client_port,
-                                    file_path=file_name,
-                                    msg_queue=client_msg_queue)
+                                  client_port=client_port,
+                                  file_path=file_name,
+                                  msg_queue=client_msg_queue)
             logging.info(f"File {file_name} uploaded, closing connection")
         except timeout:
-            logging.error(f"Timeout on client")
+            logging.error("Timeout on client")
             self.close_client_connection(client_address)
 
     def dequeue_decoded_msg(self, client_msg_queue):
-        # Sacamos el timeout de la cola porque en el upload
-        # trababa y no funcionaba.
-        # Quiza haya que agregarlo para el download, hay que ponerle
-        # timeout en la Queue y manejar la excepcion que se levanta
-        # en un except
         encoded_msg = client_msg_queue.get(block=True)
         return Message.decode(encoded_msg)
 

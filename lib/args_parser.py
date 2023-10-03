@@ -156,7 +156,8 @@ def validate_args_download(parser):
         args.host = "localhost"
     if args.port is None:
         args.port = 8080
-    if args.RDTprotocol is None or args.RDTprotocol not in [STOP_AND_WAIT, SELECTIVE_REPEAT]:
+    protocols = [STOP_AND_WAIT, SELECTIVE_REPEAT]
+    if args.RDTprotocol is None or args.RDTprotocol not in protocols:
         args.RDTprotocol = STOP_AND_WAIT
 
     return args

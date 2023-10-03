@@ -11,7 +11,6 @@ from lib.message import Message
 from lib.exceptions import DuplicatedACKError, TimeoutsRetriesExceeded
 from lib.message_utils import receive_msg, send_ack, send_close_and_wait_ack
 from lib.log import log_received_msg, log_sent_msg
-from time import sleep
 
 
 class StopAndWaitProtocol():
@@ -22,33 +21,21 @@ class StopAndWaitProtocol():
         self.tries_send = 0
         self.name = STOP_AND_WAIT
 
-    def receive(self, decoded_msg, port, file_controller, transfer_socket=None):
+    def receive(self, decoded_msg, port, file_controller,
+                transfer_socket=None):
         logging.debug(
             f"Receiving: {decoded_msg}" +
             f"next message expected: {self.ack_num}")
 
-        # dos escenarios:
-        # 1) El cliente manda el upload y no llega
-        # En este caso el server se queda esperando (Le sacamos el timeout)
-        # y al cliente
-        # se le timeoutea el socket. Entonces vuelve a mandar con el mismo
-        # seq number y aca no paso nada
-        # 2) El cliente manda upload, el server manda ACK y se pierde
-        # En este caso nosotros aumentamos nuestro ACK pero como nunca llega
-        # al cliente el seq_number se mantiene
-        # Por eso nos llega un seq_number dos veces menor que nuestro ACK,
-        # en ese caso devolvemos el seq_number + 1 y no hacemos nada pq
-        # ya tenemos ese paquete
-        # Si llega un seq que es solamente 1 numero mayor ejecutamos normal
-        # Nunca va a llegar un seq mayor al ack por el escenario 1)
         if self.ack_num > decoded_msg.seq_number + 1:
             log_received_msg(decoded_msg, port)
             if transfer_socket:
-                ack_msg = Message.ack_msg(decoded_msg.command, decoded_msg.seq_number + 1)
+                ack_msg = Message.ack_msg(decoded_msg.command,
+                                          decoded_msg.seq_number + 1)
                 transfer_socket.sendto(ack_msg, (LOCAL_HOST, port))
             else:
                 send_ack(decoded_msg.command, port, decoded_msg.seq_number + 1,
-                     self.socket)
+                         self.socket)
         else:
             file_controller.write_file(decoded_msg.data)
             log_received_msg(decoded_msg, port)
@@ -59,14 +46,8 @@ class StopAndWaitProtocol():
                 send_ack(decoded_msg.command, port, self.ack_num, self.socket)
             self.ack_num += 1
 
-    """
-    def send_error(self, command, port, error_msg):
-        msg = Message.error_msg(command, error_msg)
-        self.socket.sendto(msg.encode(), (LOCAL_HOST, port))
-        log_sent_msg(msg, self.seq_num)
-    """
-
-    def send(self, command, port, data, file_controller, msg_queue=None, server_address=None):
+    def send(self, command, port, data, file_controller, msg_queue=None,
+             server_address=None):
         if self.tries_send >= MAX_TIMEOUT_RETRIES:
             logging.error("Max timeout retries reached")
             raise TimeoutsRetriesExceeded
@@ -108,8 +89,8 @@ class StopAndWaitProtocol():
         while file_size > 0:
             data_length = len(data)
             try:
-                self.send(command, client_port, data, f_controller, server_address=server_address)
-                #sleep(1.5)
+                self.send(command, client_port, data, f_controller,
+                          server_address=server_address)
             except DuplicatedACKError:
                 continue
             except (socket.timeout, Empty):
@@ -128,10 +109,11 @@ class StopAndWaitProtocol():
         f_controller.close()
 
     def receive_file(self,
-                     file_path, client_port=LOCAL_PORT, msg_queue=None, first_encoded_msg=None, server_address=None):
+                     file_path, client_port=LOCAL_PORT,
+                     first_encoded_msg=None, server_address=None):
         f_controller = FileController.from_file_name(file_path, WRITE_MODE)
+        # por si se desconecta un cliente repentinamente:
         self.socket.settimeout(5)
-        # por si se desconecta un cliente repentinamente
         encoded_messge = None
         if first_encoded_msg:
             encoded_messge = first_encoded_msg
@@ -141,17 +123,19 @@ class StopAndWaitProtocol():
 
         while decoded_message.flags != CLOSE.encoded:
             if server_address:
-                self.receive(decoded_message, server_address[1], f_controller, transfer_socket=self.socket)
+                self.receive(decoded_message, server_address[1], f_controller,
+                             transfer_socket=self.socket)
             else:
-                self.receive(decoded_message, client_port, f_controller, transfer_socket=self.socket)
-            #encoded_messge = receive_msg(msg_queue, self.socket)
+                self.receive(decoded_message, client_port, f_controller,
+                             transfer_socket=self.socket)
+
             encoded_messge = self.socket.recvfrom(BUFFER_SIZE)[0]
             decoded_message = Message.decode(encoded_messge)
-        
+
         if server_address:
             self.socket.sendto(Message.close_ack_msg(decoded_message.command),
-                           server_address)
+                               server_address)
         else:
             self.socket.sendto(Message.close_ack_msg(decoded_message.command),
-                           (LOCAL_HOST, client_port))
+                               (LOCAL_HOST, client_port))
         f_controller.close()

@@ -1,7 +1,3 @@
-# Flags used in the protocol
-# [HI, CLOSE, ACK, CORRUPTED_PACKAGE]
-# [1 0 0 0]
-# [1 0 1 0]
 class Flag:
     def __init__(self, id):
         self.encoded = id

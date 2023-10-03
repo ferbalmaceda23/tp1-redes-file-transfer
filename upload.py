@@ -9,7 +9,6 @@ from lib.message_utils import send_close
 
 
 def upload(client):
-    #client.protocol.upload(args, server_address=client.server_address)
     try:
         client.protocol.send_file(args, server_address=client.server_address)
     except KeyboardInterrupt:

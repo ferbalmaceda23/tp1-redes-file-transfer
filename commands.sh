@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # start server
-python3 start-server.py -s server-storage -v &
+python3 start-server.py -s server-storage -v
 
 # upload selective repeat
 python3 upload.py -v -s test-files/image.jpg -pr sr

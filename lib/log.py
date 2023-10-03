@@ -1,8 +1,6 @@
 import logging
-
 from lib.constants import DATA_SIZE
 
-# Para despues
 RED = "\033[91m"
 WHITE = "\033[0m"
 GREEN = "\033[92m"

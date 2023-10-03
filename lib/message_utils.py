@@ -28,15 +28,15 @@ def send_error(socket, command, port, error_msg):
     socket.sendto(encoded_msg, (LOCAL_HOST, port))
 
 
-def send_close_and_wait_ack(socket_, msq_queue, client_port, command, server_address=None):
+def send_close_and_wait_ack(socket_, msq_queue, client_port,
+                            command, server_address=None):
     close_tries = 0
     while close_tries < MAX_TIMEOUT_RETRIES:
         try:
             if server_address:
                 send_close(socket_, command, server_address)
             else:
-                send_close(socket_, command,
-                       (LOCAL_HOST, client_port))
+                send_close(socket_, command, (LOCAL_HOST, client_port))
             maybe_close_ack = receive_msg(msq_queue, socket_, TIMEOUT)
             if Message.decode(maybe_close_ack).flags == CLOSE_ACK.encoded:
                 logging.debug("Received close ACK")
